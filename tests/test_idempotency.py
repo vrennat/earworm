@@ -1,4 +1,4 @@
-"""Regression tests for the feed-duplication bug. Run: .venv/bin/python tests/test_idempotency.py
+"""Regression tests for the feed-duplication bug. Run: uv run python tests/test_idempotency.py
 
 No pytest dependency — plain asserts so it runs anywhere the package imports.
 

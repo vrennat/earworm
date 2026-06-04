@@ -22,7 +22,7 @@ REPO_ID = "hexgrad/Kokoro-82M"
 
 
 class KokoroEngine:
-    def __init__(self, voice_config: dict):
+    def __init__(self, voice_config: dict) -> None:
         k = voice_config.get("kokoro", {})
         a = voice_config.get("audio", {})
         self.voice = k.get("voice", "af_bella")

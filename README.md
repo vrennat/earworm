@@ -10,19 +10,22 @@ they only ever communicate through a folder of script files.
 
 ## 30-second quickstart
 
+Earworm uses [uv](https://docs.astral.sh/uv/). `uv sync` reads `.python-version`
+(3.11), provisions the interpreter if needed, and installs the locked deps.
+
 ```sh
-# Requirements: Python 3.10+, ffmpeg, and the `claude` CLI (authenticated).
+# Requirements: uv, ffmpeg, and the `claude` CLI (authenticated). uv handles Python.
 git clone <your-fork> earworm && cd earworm
 
-uv sync                                   # create .venv, install deps (incl. Kokoro + torch)
+uv sync                                   # create .venv + install locked deps (incl. Kokoro + torch)
 cp config/voice.example.toml  config/voice.toml
 cp config/show.example.toml   config/show.toml
 cp config/lexicon.example.toml config/lexicon.toml
 
-.venv/bin/earworm init                    # create data dirs + queue db
-.venv/bin/earworm add "What is the current state of small language models, and why does it matter?"
-.venv/bin/earworm run                     # research -> review -> script  (writes inbox/scripts/<id>.md)
-.venv/bin/earworm watch                   # render scripts -> episodes/<id>.mp3  (long-running)
+uv run earworm init                       # create data dirs + queue db
+uv run earworm add "What is the current state of small language models, and why does it matter?"
+uv run earworm run                        # research -> review -> script  (writes inbox/scripts/<id>.md)
+uv run earworm watch                      # render scripts -> episodes/<id>.mp3  (long-running)
 ```
 
 The first synthesis downloads the Kokoro model (~few hundred MB) and warms up in ~30s;
@@ -122,7 +125,7 @@ the pipeline reads these as separate files — copy each `*.example.toml` to its
 `lang_code`: `a` American, `b` British) in `config/voice.toml`, or set a weighted `blend`.
 Naming is `<lang><gender>_<name>` — e.g. `af_sky` (American female), `am_michael`
 (American male), `bf_emma` (British female). Audition them with
-`python scripts/voice_sampler.py`.
+`uv run python scripts/voice_sampler.py`.
 
 **Pronunciation.** Kokoro mispronounces some proper nouns and acronyms. `config/lexicon.toml`
 maps a word to misaki modified-IPA; the renderer rewrites it inline so Kokoro honors it.
@@ -161,7 +164,7 @@ config/         *.example.toml templates (copy to real names; reals are gitignor
 src/earworm/    cli, db, runner (Claude calls), render (TTS + tagging), normalize, tts/
 scripts/        cover generator, voice sampler
 worker/         Cloudflare Worker (TypeScript) for the optional private feed
-tests/          normalize + idempotency tests (run: .venv/bin/python tests/<file>)
+tests/          normalize + idempotency tests (run: uv run python tests/<file>)
 ```
 
 ## License

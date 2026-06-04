@@ -7,14 +7,10 @@ Override the root with the EARWORM_HOME environment variable.
 from __future__ import annotations
 
 import os
+import tomllib
 from dataclasses import dataclass
 from functools import lru_cache
 from pathlib import Path
-
-try:
-    import tomllib  # Python 3.11+
-except ModuleNotFoundError:  # pragma: no cover
-    import tomli as tomllib  # type: ignore
 
 
 def project_root() -> Path:

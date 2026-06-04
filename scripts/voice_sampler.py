@@ -1,5 +1,5 @@
 """Generate a single mp3 auditioning several English Kokoro voices.
-Run: .venv/bin/python scripts/voice_sampler.py
+Run: uv run python scripts/voice_sampler.py
 """
 import warnings
 warnings.filterwarnings("ignore")

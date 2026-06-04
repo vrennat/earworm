@@ -4,7 +4,7 @@ Minimal, modern: dark navy background with a subtle vertical gradient, the
 lowercase wordmark "earworm" in San Francisco, and a single coral accent dot as
 the period. The Daily meets Stratechery — no clip art, lots of negative space.
 
-Usage: python scripts/make_cover.py [out_path]
+Usage: uv run python scripts/make_cover.py [out_path]
 """
 import sys
 from pathlib import Path

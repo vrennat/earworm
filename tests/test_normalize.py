@@ -1,4 +1,4 @@
-"""Standalone tests for earworm.normalize. Run: .venv/bin/python tests/test_normalize.py
+"""Standalone tests for earworm.normalize. Run: uv run python tests/test_normalize.py
 
 No pytest dependency — plain asserts so it runs anywhere the package imports.
 """
