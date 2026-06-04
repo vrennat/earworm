@@ -76,25 +76,19 @@ independently.
 - **Atomic handoff:** scripts are generated/revised in a staging dir and `os.replace`d
   into `inbox/scripts/` only when finished, so the watcher never renders a half-written file.
 
-## Backend matrix
+## Backends
 
-**Research + scripting.** Earworm shells out to a CLI for the five generation passes.
-Today only the Claude CLI is wired in (`src/earworm/claude.py`, `runner.py`); OpenAI and
-Ollama are on the roadmap, not yet implemented.
+**Research + scripting** run through the Claude CLI (`src/earworm/claude.py`, `runner.py`) —
+`claude -p` headless with a tool allowlist, web search in the research pass. Authenticate
+with `claude login` or `ANTHROPIC_API_KEY`.
 
-| Backend     | Status              | Auth                                   | Notes                                            |
-| ----------- | ------------------- | -------------------------------------- | ------------------------------------------------ |
-| Claude CLI  | ✅ supported (default) | `claude login` or `ANTHROPIC_API_KEY` | Uses `claude -p` headless with a tool allowlist. Web search runs in the research pass. |
-| OpenAI      | 🔜 planned          | `OPENAI_API_KEY`                        | Not implemented. Would need an OpenAI generator behind the same interface. |
-| Ollama      | 🔜 planned          | local, none                             | Not implemented. Local models trade quality/web-search for zero cost + privacy. |
-
-**Narration (TTS).** Selected by `engine` in `config/voice.toml` — swapping engines is a
+**Narration (TTS)** is selected by `engine` in `config/voice.toml` — swapping engines is a
 config change, not a code change (`src/earworm/tts/base.py`).
 
-| Engine      | Status       | Auth                          | Notes                                    |
-| ----------- | ------------ | ----------------------------- | ---------------------------------------- |
-| Kokoro      | ✅ default    | none (local)                  | 54 voices, runs on-device, free.         |
-| ElevenLabs  | ✅ supported  | `EARWORM_ELEVENLABS_API_KEY`  | Higher fidelity, per-character API cost. |
+| Engine      | Auth                          | Notes                                    |
+| ----------- | ----------------------------- | ---------------------------------------- |
+| Kokoro      | none (local)                  | Default. 54 voices, runs on-device, free. |
+| ElevenLabs  | `EARWORM_ELEVENLABS_API_KEY`  | Higher fidelity, per-character API cost. |
 
 ## Cost per episode
 
@@ -155,7 +149,6 @@ key — the Worker never proxies it.
 
 ## NOT in v1
 
-- **OpenAI / Ollama research backends.** Only the Claude CLI is wired in today.
 - **A hosted/managed service.** This is a local CLI you run yourself.
 - **Scheduling / daemonization.** No bundled launchd/systemd/cron units — wrap `earworm run`
   and `earworm watch` with your OS's scheduler if you want hands-off operation.
