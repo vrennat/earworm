@@ -18,17 +18,13 @@
 
 # ----- [voice.toml] Voice / TTS -----------------------------------------------
 [voice]
-engine = "kokoro"            # "kokoro" (local, free) | "elevenlabs" (API, paid)
+engine = "kokoro"            # local neural TTS, the only engine in v1
 
 [voice.kokoro]
 voice = "af_sky"             # narrator; 54 voices available (see README)
 speed = 1.05
 lang_code = "a"              # 'a' American, 'b' British — MUST match the voice
 # blend = [["af_sky", 0.7], ["af_bella", 0.3]]   # optional weighted voice blend
-
-[voice.elevenlabs]
-voice_id = ""                # used only when engine = "elevenlabs"
-model = "eleven_turbo_v2_5"
 
 [voice.audio]
 bitrate = "128k"

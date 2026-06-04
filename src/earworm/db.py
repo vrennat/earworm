@@ -1,4 +1,4 @@
-"""SQLite queue + episode ledger. Local source of truth for the runner (Phase 1-3).
+"""SQLite queue + episode ledger. Local source of truth for the runner.
 
 Two tables:
 - topics: the producer/consumer queue (manual + auto items).
@@ -149,13 +149,6 @@ def mark_failed(topic_id: int, error: str) -> None:
             "UPDATE topics SET status='failed', notes=? WHERE id=?",
             (error[:4000], topic_id),
         )
-
-
-def reset_stale_running() -> int:
-    """Return 'running' items to 'pending' (e.g. after a crash). Returns count reset."""
-    with connect() as conn:
-        cur = conn.execute("UPDATE topics SET status='pending' WHERE status='running'")
-        return cur.rowcount
 
 
 # --- episodes ledger ------------------------------------------------------

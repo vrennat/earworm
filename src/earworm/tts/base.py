@@ -23,8 +23,4 @@ def get_engine(voice_config: dict) -> TTSEngine:
         from .kokoro_engine import KokoroEngine
 
         return KokoroEngine(voice_config)
-    if engine == "elevenlabs":
-        from .elevenlabs_engine import ElevenLabsEngine
-
-        return ElevenLabsEngine(voice_config)
     raise ValueError(f"unknown TTS engine: {engine!r}")

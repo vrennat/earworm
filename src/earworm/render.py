@@ -4,7 +4,8 @@ For each new inbox/scripts/*.md: synthesize audio, tag it with metadata + show
 notes derived from the report, record it in the episodes ledger, and move the
 processed script to done/. No LLM. Idempotent on the script body's content hash.
 
-Phase 1 stops at a tagged local mp3. Phase 2 adds R2 upload + feed registration here.
+Produces a tagged local mp3; if the feed is configured, also uploads to R2 and
+registers the episode with the Worker.
 """
 from __future__ import annotations
 

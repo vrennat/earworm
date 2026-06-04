@@ -82,13 +82,10 @@ independently.
 `claude -p` headless with a tool allowlist, web search in the research pass. Authenticate
 with `claude login` or `ANTHROPIC_API_KEY`.
 
-**Narration (TTS)** is selected by `engine` in `config/voice.toml` — swapping engines is a
-config change, not a code change (`src/earworm/tts/base.py`).
-
-| Engine      | Auth                          | Notes                                    |
-| ----------- | ----------------------------- | ---------------------------------------- |
-| Kokoro      | none (local)                  | Default. 54 voices, runs on-device, free. |
-| ElevenLabs  | `EARWORM_ELEVENLABS_API_KEY`  | Higher fidelity, per-character API cost. |
+**Narration (TTS)** is [Kokoro](https://github.com/hexgrad/kokoro) — a local neural voice
+model. 54 voices, runs on-device, no API key, free. Selected by `engine` in
+`config/voice.toml`; the engine is loaded behind a small interface
+(`src/earworm/tts/base.py`) so another backend can be dropped in later.
 
 ## Cost per episode
 
@@ -103,8 +100,6 @@ fetches. Measure your own before trusting a number.
   - On a **pay-as-you-go API key**: the five passes (research with web search is the
     heaviest) are the cost driver. Ballpark **a few cents to ~$1 per episode** with
     Sonnet; more with Opus, less with Haiku. Treat this as a starting guess, not a quote.
-- **Narration (ElevenLabs), if enabled:** per-character API pricing — a 10-minute episode
-  is several thousand characters; check current ElevenLabs rates.
 - **Publishing (Cloudflare R2 + Worker), if enabled:** effectively $0 at personal volume
   (well within free tiers).
 
@@ -164,7 +159,7 @@ key — the Worker never proxies it.
 prompts/        the five LLM prompts — the heart of it
 config/         *.example.toml templates (copy to real names; reals are gitignored)
 src/earworm/    cli, db, runner (Claude calls), render (TTS + tagging), normalize, tts/
-scripts/        cover generator, voice sampler, batch re-render, rerun helpers
+scripts/        cover generator, voice sampler
 worker/         Cloudflare Worker (TypeScript) for the optional private feed
 tests/          normalize + idempotency tests (run: .venv/bin/python tests/<file>)
 ```

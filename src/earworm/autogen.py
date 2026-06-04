@@ -1,4 +1,4 @@
-"""Auto-topic generator (Phase 3). Reads interests.md and recent topics/episodes,
+"""Auto-topic generator. Reads interests.md and recent topics/episodes,
 asks Claude Code for fresh topics, and queues them with source='auto'.
 
 One half of the two-producer queue (the other is `earworm add`). The runner drains

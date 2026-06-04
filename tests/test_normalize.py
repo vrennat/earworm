@@ -19,7 +19,7 @@ def main() -> int:
     # all-caps acronyms -> dot-separated
     check("We built an API.", "We built an A.P.I..")
     check("AI and LLM and HTTP", "A.I. and L.L.M. and H.T.T.P.")
-    check("Commander, also called EDH", "Commander, also called E.D.H.")
+    check("The spec, also called RFC", "The spec, also called R.F.C.")
     # plural acronyms read as plurals: dotted letters + apostrophe-s (a trailing
     # ".s" would voice the letter S; "...I's" reads as the /z/ plural)
     check("Lots of APIs and LLMs", "Lots of A.P.I's and L.L.M's")
@@ -29,8 +29,8 @@ def main() -> int:
     check("WASM CRUD FOSS NASA OPEC NATO RAM ROM SIM PIN",
           "WASM CRUD FOSS NASA OPEC NATO RAM ROM SIM PIN")
     check("PINs stay intact", "PINs stay intact")
-    # EDHREC is whitelisted (lexicon pronounces it "EDH-rec"); EDHRECast too
-    check("EDHREC and EDHRECast", "EDHREC and EDHRECast")
+    # ICANN is whitelisted (lexicon pronounces it "EYE-can"), not letter-by-letter
+    check("ICANN sets policy", "ICANN sets policy")
     # alphanumeric stack codes
     check("Cloudflare D1, R2, and S3", "Cloudflare D-one, R-two, and S-three")
     # technical substitutions win over the generic acronym pass

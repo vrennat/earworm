@@ -49,10 +49,9 @@ _DEG = re.compile(r"°")
 _LEADING_MINUS = re.compile(r"(?<![\w.])-(?=\d)")
 
 # Acronyms left intact by the dot-expansion pass — either spoken as a plain word
-# or handed off to a custom lexicon pronunciation (e.g. EDHREC -> "EDH-rec").
+# or handed off to a custom lexicon pronunciation (e.g. ICANN -> "EYE-can").
 _SAY_AS_WORD = frozenset({
     "WASM", "CRUD", "FOSS", "NASA", "OPEC", "NATO", "RAM", "ROM", "SIM", "PIN",
-    "EDHREC",  # lexicon gives it "EDH-rec", not letter-by-letter
     "ICANN",   # lexicon gives it "EYE-can", not "I.C.A.N.N."
     "NVIDIA",  # lexicon gives it "en-VID-ee-ah", not "N.V.I.D.I.A."
     "CUDA",    # lexicon gives it "KOO-dah", not "C.U.D.A."

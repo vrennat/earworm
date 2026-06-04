@@ -1,6 +1,5 @@
 # Voice / TTS configuration. Copy to config/voice.toml.
-# Swapping `engine` is the ONLY change needed to upgrade a render to ElevenLabs.
-engine = "kokoro"          # "kokoro" | "elevenlabs"
+engine = "kokoro"          # local neural TTS, the only engine in v1
 
 [kokoro]
 voice = "af_sky"           # default narrator; see README for the full 54-voice list
@@ -13,11 +12,6 @@ lang_code = "a"            # 'a' = American English, 'b' = British English (MUST
 # built as a weighted sum of the voice tensors at render time. Comment out to use
 # the single `voice` above.
 blend = [["af_sky", 0.7], ["af_bella", 0.3]]
-
-[elevenlabs]
-# Used only when engine = "elevenlabs". API key read from EARWORM_ELEVENLABS_API_KEY.
-voice_id = ""
-model = "eleven_turbo_v2_5"
 
 [audio]
 bitrate = "128k"           # mp3 bitrate; voice is fine at 96-128k
