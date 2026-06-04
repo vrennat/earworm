@@ -1,0 +1,29 @@
+{
+  // Copy to wrangler.jsonc (gitignored) and fill in your account + database IDs.
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "earworm-feed",
+  "main": "src/index.ts",
+  "compatibility_date": "2026-05-01",
+  // Pinned because an OAuth-less R2 token can't enumerate accounts (wrangler quirk).
+  "account_id": "your-cloudflare-account-id",
+  "observability": { "enabled": true },
+  // Non-secret show metadata. FEED_TOKEN and INGEST_SECRET are set via
+  // `wrangler secret put` (and .dev.vars for local dev) — never committed.
+  "vars": {
+    "SHOW_TITLE": "Earworm",
+    "SHOW_AUTHOR": "Your Name",
+    "SHOW_DESCRIPTION": "A personal research briefing. One topic, researched and read aloud.",
+    "SHOW_EMAIL": "you@example.com",
+    "SHOW_IMAGE": "https://pub-xxxxxxxxxxxx.r2.dev/cover.png",
+    "SHOW_LANGUAGE": "en-us",
+    "SHOW_CATEGORY": "Technology",
+    "SHOW_LINK": "https://earworm-feed.your-subdomain.workers.dev"
+  },
+  "d1_databases": [
+    {
+      "binding": "DB",
+      "database_name": "earworm",
+      "database_id": "your-d1-database-id"
+    }
+  ]
+}

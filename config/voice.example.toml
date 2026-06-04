@@ -1,0 +1,38 @@
+# Voice / TTS configuration. Copy to config/voice.toml.
+# Swapping `engine` is the ONLY change needed to upgrade a render to ElevenLabs.
+engine = "kokoro"          # "kokoro" | "elevenlabs"
+
+[kokoro]
+voice = "af_sky"           # default narrator; see README for the full 54-voice list
+speed = 1.05               # a touch quick — keeps energy up, avoids slow/dramatic pacing
+lang_code = "a"            # 'a' = American English, 'b' = British English (MUST match the voice)
+# trf stays off: the transformer G2P is a 436MB download with no measured
+# homograph benefit over the default. Fix specific words via the lexicon instead.
+
+# Optional warmth blend — overrides `voice` when set. Weights are normalized and
+# built as a weighted sum of the voice tensors at render time. Comment out to use
+# the single `voice` above.
+blend = [["af_sky", 0.7], ["af_bella", 0.3]]
+
+[elevenlabs]
+# Used only when engine = "elevenlabs". API key read from EARWORM_ELEVENLABS_API_KEY.
+voice_id = ""
+model = "eleven_turbo_v2_5"
+
+[audio]
+bitrate = "128k"           # mp3 bitrate; voice is fine at 96-128k
+sample_rate = 24000        # Kokoro native rate
+gap_ms = 900               # silence between paragraphs — breathing room without slowing speech
+section_gap_ms = 1200      # longer beat at a `---` line (major topic transition / pre-sign-off)
+
+# Broadcast-style mastering applied after Kokoro, before mp3 encode.
+# Stages run in order (compress -> EQ -> loudnorm -> fade-out -> silence pads).
+# Each is a raw ffmpeg filter string — edit freely; set enabled=false to bypass.
+[mastering]
+enabled = true
+compress = "acompressor=threshold=-20dB:ratio=2:attack=10:release=100:makeup=4"
+eq = "highpass=f=80,equalizer=f=4000:t=q:w=1:g=3"
+loudnorm = "loudnorm=I=-16:TP=-1.5:LRA=11"   # EBU R128, -16 LUFS podcast standard
+fade_out_sec = 0.5
+pad_start_sec = 0.3
+pad_end_sec = 1.0

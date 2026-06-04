@@ -1,0 +1,9 @@
+# Show-level podcast metadata. Copy to config/show.toml.
+# Used for ID3 tags on every mp3 and for the RSS feed channel (if you publish).
+title = "Earworm"
+author = "Your Name"
+description = "A personal research briefing. One topic, researched and read aloud."
+# Square cover image (1400-3000px) — required by Apple Podcasts to add the show.
+image = "https://example.com/cover.png"
+language = "en-us"
+category = "Technology"

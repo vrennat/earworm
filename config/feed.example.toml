@@ -1,0 +1,14 @@
+# Feed publishing config (non-secret). Copy to config/feed.toml.
+# Only needed if you publish to a private podcast feed (the optional Cloudflare
+# Worker). Leave `enabled = false` for local-only use — episodes still render to
+# episodes/*.mp3 without any of this.
+#
+# Secrets (ingest_secret, feed_token) live in config/secrets.toml or env vars.
+enabled = false
+
+account_id = "your-cloudflare-account-id"
+bucket = "earworm-audio"
+audio_key_prefix = "audio"
+
+worker_url = "https://earworm-feed.your-subdomain.workers.dev"
+public_audio_base = "https://pub-xxxxxxxxxxxx.r2.dev"

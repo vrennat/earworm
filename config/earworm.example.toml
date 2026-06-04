@@ -1,0 +1,75 @@
+# =============================================================================
+# Earworm — consolidated configuration reference
+# =============================================================================
+# This is a single annotated view of EVERY setting Earworm reads, for reference.
+#
+# At runtime the pipeline reads these as SEPARATE files in config/ (copy each
+# *.example.toml to its real name):
+#
+#   config/voice.toml    <- voice.example.toml      (required for rendering)
+#   config/show.toml     <- show.example.toml       (required for rendering)
+#   config/lexicon.toml  <- lexicon.example.toml    (optional, recommended)
+#   config/feed.toml     <- feed.example.toml        (only if publishing)
+#   config/secrets.toml  <- secrets.example.toml     (only if publishing)
+#
+# Secrets and the ANTHROPIC_API_KEY live outside this file — see .env.example.
+# =============================================================================
+
+
+# ----- [voice.toml] Voice / TTS -----------------------------------------------
+[voice]
+engine = "kokoro"            # "kokoro" (local, free) | "elevenlabs" (API, paid)
+
+[voice.kokoro]
+voice = "af_sky"             # narrator; 54 voices available (see README)
+speed = 1.05
+lang_code = "a"              # 'a' American, 'b' British — MUST match the voice
+# blend = [["af_sky", 0.7], ["af_bella", 0.3]]   # optional weighted voice blend
+
+[voice.elevenlabs]
+voice_id = ""                # used only when engine = "elevenlabs"
+model = "eleven_turbo_v2_5"
+
+[voice.audio]
+bitrate = "128k"
+sample_rate = 24000
+gap_ms = 900
+section_gap_ms = 1200
+
+[voice.mastering]
+enabled = true
+compress = "acompressor=threshold=-20dB:ratio=2:attack=10:release=100:makeup=4"
+eq = "highpass=f=80,equalizer=f=4000:t=q:w=1:g=3"
+loudnorm = "loudnorm=I=-16:TP=-1.5:LRA=11"
+fade_out_sec = 0.5
+pad_start_sec = 0.3
+pad_end_sec = 1.0
+
+
+# ----- [show.toml] Podcast metadata -------------------------------------------
+[show]
+title = "Earworm"
+author = "Your Name"
+description = "A personal research briefing. One topic, researched and read aloud."
+image = "https://example.com/cover.png"
+language = "en-us"
+category = "Technology"
+
+
+# ----- [feed.toml] Optional publishing ----------------------------------------
+[feed]
+enabled = false
+account_id = "your-cloudflare-account-id"
+bucket = "earworm-audio"
+audio_key_prefix = "audio"
+worker_url = "https://earworm-feed.your-subdomain.workers.dev"
+public_audio_base = "https://pub-xxxxxxxxxxxx.r2.dev"
+
+
+# ----- [secrets.toml] Publishing secrets (or use env vars) --------------------
+[secrets.cloudflare]
+api_token = ""               # or CLOUDFLARE_API_TOKEN
+
+[secrets.feed]
+ingest_secret = ""           # or EARWORM_INGEST_SECRET
+feed_token = ""              # or EARWORM_FEED_TOKEN

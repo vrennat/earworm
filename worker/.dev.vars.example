@@ -1,0 +1,4 @@
+# Copy to .dev.vars (gitignored) for local `wrangler dev`.
+# In production these are set via `wrangler secret put FEED_TOKEN` / `INGEST_SECRET`.
+FEED_TOKEN="dev-feed-token-change-me"
+INGEST_SECRET="dev-ingest-secret-change-me"

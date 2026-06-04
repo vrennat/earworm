@@ -1,0 +1,39 @@
+# Python
+.venv/
+__pycache__/
+*.pyc
+.uv/
+*.egg-info/
+build/
+dist/
+
+# Local config — only the *.example.toml templates are tracked
+config/*.toml
+!config/*.example.toml
+.env
+
+# Runtime data (generated, never committed)
+*.db
+*.db-*
+inbox/
+done/
+runs/
+episodes/
+samples/
+logs/
+*.mp3
+*.wav
+
+# Cover art (generated; run scripts/make_cover.py)
+config/cover.png
+
+# Worker — only wrangler.example.jsonc is tracked
+worker/node_modules/
+worker/.wrangler/
+worker/.dev.vars
+worker/wrangler.jsonc
+worker/bun.lock
+
+# Local session / editor state
+.claude/
+.DS_Store

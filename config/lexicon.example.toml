@@ -1,0 +1,133 @@
+# Pronunciation overrides applied before synthesis (Kokoro/misaki).
+# Copy to config/lexicon.toml and add your own entries.
+#
+# Each entry maps a whole word (case-sensitive) to misaki modified-IPA; the
+# renderer rewrites it to `[word](/ipa/)`, which Kokoro honors down to the audio.
+#
+# misaki modified-IPA notation:
+#   capital O = "oh" diphthong, I = "eye", A = "ay"; ˈ = primary stress, ˌ = secondary.
+#   ɹ = American r, ð = "th" (this), θ = "th" (thin).
+# Tip (avoid guessing): phonemize a word it ALREADY says right and copy the output:
+#   .venv/bin/python -c "from misaki import en; print(en.G2P(trf=False)('red')[0])"
+# WARNING: misaki does not validate the IPA — wrong symbols produce garbled audio.
+#
+# The entries below are a useful starting set for a tech/AI show. Trim or extend
+# to fit your subject matter.
+
+[words]
+Kokoro = "kˈOkəɹO"
+exile = "ˈɛksaɪl"          # "EKS-ile" — misaki's default ˈɛɡzˌIl voices the s as a z
+
+# Rhetoric / debate terms — misaki reduces the "man" in the one-word compounds
+# to a schwa ("steelman" -> stˈilmən). Force a clear "man" (mˌæn).
+steelman = "stˈil mˌæn"
+"steel man" = "stˈil mˌæn"
+strawman = "stɹˈɔ mˌæn"
+"straw man" = "stɹˈɔ mˌæn"
+
+# Domains / registries / drop-catching brands (misaki returns ❓ for several)
+ICANN = "ˈIkæn"            # "EYE-can" — normalizer whitelists it so the lexicon wins
+Verisign = "vˈɛɹɪsˌIn"     # VAIR-ih-sine
+Dynadot = "dˈInədˌɑt"      # DYE-nuh-dot
+Namecheap = "nˈAmʧˌip"     # NAME-cheep
+Pheenix = "fˈinɪks"        # FEE-nix (the drop-catcher, said like "phoenix")
+
+# --- Technology / AI / networking ---
+# Acronyms spelled letter-by-letter
+AI = "ˈA, ˈI"              # "A, I" — comma forces a break so the eɪ/aɪ diphthongs don't glide into one "eye"
+AGI = "ˈA ʤˈi ˈI"
+LLM = "ˌɛl ˌɛl ˈɛm"
+GPT = "ʤˈi pˈi tˈi"
+RLHF = "ɑɹ ˌɛl ˈAʧ ˈɛf"
+NLP = "ˈɛn ˌɛl pˈi"
+API = "ˈA pˈi ˈI"
+DNS = "dˈi ˈɛn ˈɛs"
+CDN = "sˈi dˈi ˈɛn"
+SSL = "ˈɛs ˈɛs ˌɛl"
+TLS = "tˈi ˌɛl ˈɛs"
+TCP = "tˈi sˈi pˈi"
+UDP = "ju dˈi pˈi"
+HTTPS = "ˈAʧ tˈi tˈi pˈi ˈɛs"
+gRPC = "ʤˈi ɑɹ pˈi sˈi"
+DHCP = "dˈi ˈAʧ sˈi pˈi"
+IPv6 = "ˈI pˈi vˈi sˈɪks"
+npm = "ˈɛn pˈi ˈɛm"
+IoT = "ˈI ˈO tˈi"
+CLI = "sˈi ˌɛl ˈI"
+IDE = "ˈI dˈi ˈi"
+SDK = "ˈɛs dˈi kˈA"
+SRE = "ˈɛs ˌɑɹ ˈi"
+ORM = "ˈO ˌɑɹ ˈɛm"
+# Acronyms said as words
+RAG = "ɹˈæɡ"
+REST = "ɹˈɛst"
+CORS = "kˈɔɹz"
+CIDR = "sˈIdəɹ"
+NAT = "nˈæt"
+CRUD = "kɹˈʌd"
+GUI = "ɡˈui"
+FAANG = "fˈæŋ"
+FOSS = "fˈɑs"
+SaaS = "sˈæs"
+PaaS = "pˈæs"
+WASM = "wˈɑzəm"
+DevOps = "dˈɛv ˌɑps"
+OAuth = "ˈO ɔθ"
+# Said as words / non-obvious
+transformer = "tɹænsfˈɔɹməɹ"
+tokenizer = "tˈOkənˌIzəɹ"
+embeddings = "əmbˈɛdɪŋz"
+multimodal = "mˌʌltimˈOdᵊl"
+inference = "ˈɪnfəɹəns"
+latency = "lˈAtᵊnsi"
+hallucination = "həlˌusənˈAʃən"
+ONNX = "ˈɑnɪks"
+PyTorch = "pˈI tˈɔɹʧ"
+TensorFlow = "tˈɛnsəɹ flˈO"
+webhook = "wˈɛb hˈʊk"
+WebSocket = "wˈɛb sˈɑkət"
+nginx = "ˈɛnʤən ˈɛks"
+Kubernetes = "kˌubəɹnˈɛtiz"
+Docker = "dˈɑkəɹ"
+Tailscale = "tˈAl skˌAl"
+WireGuard = "wˈIəɹ ɡˌɑɹd"
+subnet = "sˈʌb nˌɛt"
+GraphQL = "ɡɹˈæf kjˈu ˌɛl"
+Svelte = "svˈɛlt"
+SvelteKit = "svˈɛlt kˌɪt"
+Vite = "vˈit"
+Deno = "dˈi nˌO"
+TypeScript = "tˈIp skɹˌɪpt"
+Cloudflare = "klˈWd flˌɛɹ"
+Wrangler = "ɹˈæŋɡᵊləɹ"
+WebAssembly = "wˈɛb əsˈɛmbli"
+# SQL family — say "sequel", not the letters S-Q-L
+SQL = "sˈikwəl"
+SQLite = "sˈikwəl lˈIt"        # "sequel lite" (also fixes SQLite-backed via word match)
+# Hyphenated "per-X" compounds: the hyphen misplaces stress; force an even
+# "per X" read (per = unstressed function word ahead of the stressed noun).
+"per-tenant" = "pɜɹ tˈɛnənt"
+"per-request" = "pɜɹ ɹəkwˈɛst"
+"per-worker" = "pɜɹ wˈɜɹkəɹ"
+"per-account" = "pɜɹ əkˈWnt"
+"per-region" = "pɜɹ ɹˈiʤᵊn"
+"per-user" = "pɜɹ jˈuzəɹ"
+"per-session" = "pɜɹ sˈɛʃən"
+# Companies / products
+Anthropic = "ænθɹˈɑpɪk"
+DeepMind = "dˈip mˌInd"
+NVIDIA = "ɛnvˈɪdiə"        # "en-VID-ee-ah"
+CUDA = "kˈudə"             # "KOO-dah"
+# AI researchers / public figures — per-token so each matches alone or in a full name.
+Andrej = "ˈɑndɹA"          # ON-dray
+Karpathy = "kɑɹpˈɑθi"      # kar-PAH-thee
+Dario = "dˈɑɹiO"           # DAH-ree-oh
+Amodei = "ˌɑmOˈdA"         # ah-mo-DAY
+Yann = "jˈɑn"              # YAHN
+LeCun = "ləkˈʌn"           # luh-KUHN
+Yoshua = "jOʃˈuə"          # yo-SHOO-ah
+Bengio = "bˈɛnʤiO"         # BEN-jee-oh
+Ilya = "ˈɪljə"             # IL-yah
+Sutskever = "sˈʌtskɛvəɹ"   # SUTS-keh-ver
+Demis = "dˈɛmɪs"           # DEH-miss
+Hassabis = "hɑsˈɑbɪs"      # hah-SAH-biss
