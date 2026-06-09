@@ -45,7 +45,9 @@ earworm render <file.md>     one-shot render of a single script (testing)
 earworm publish              retry upload + register for any unpublished episodes
 ```
 
-`run` accepts `--model` to override the Claude model (e.g. `--model sonnet`).
+`run` accepts `--model` to force one model across every stage (e.g. `--model sonnet`).
+For finer control — a different model per pass, retries, fallback, or skipping a
+quality pass — use `config/pipeline.toml` (see [Pipeline configuration](#pipeline-configuration)).
 
 ## Architecture
 
@@ -81,9 +83,12 @@ independently.
 
 ## Backends
 
-**Research + scripting** run through the Claude CLI (`src/earworm/claude.py`, `runner.py`) —
-`claude -p` headless with a tool allowlist, web search in the research pass. Authenticate
-with `claude login` or `ANTHROPIC_API_KEY`.
+**Research + scripting** run through the Claude CLI — `claude -p` headless with a tool
+allowlist, web search in the research pass. Earworm is coupled to Claude Code by design:
+the agentic web-research-and-write loop is the whole quality story, so there is no
+pluggable LLM backend. `claude.py` is the thin CLI wrapper; `pipeline.py` declares the
+five passes and the executor (per-stage model, retry, fallback); `runner.py` orchestrates.
+Authenticate with `claude login` or `ANTHROPIC_API_KEY`.
 
 **Narration (TTS)** is [Kokoro](https://github.com/hexgrad/kokoro) — a local neural voice
 model. 54 voices, runs on-device, no API key, free. Selected by `engine` in
@@ -113,6 +118,7 @@ the pipeline reads these as separate files — copy each `*.example.toml` to its
 
 | File                  | Required?            | Purpose                                            |
 | --------------------- | -------------------- | -------------------------------------------------- |
+| `config/pipeline.toml`| optional             | Per-stage model, retries, fallback, stage toggles  |
 | `config/voice.toml`   | for rendering        | TTS engine, voice/blend, audio + mastering chain   |
 | `config/show.toml`    | for rendering        | Podcast title/author/description/cover (ID3 + RSS) |
 | `config/lexicon.toml` | optional (recommended) | Pronunciation overrides (IPA) for proper nouns   |
@@ -130,6 +136,24 @@ Naming is `<lang><gender>_<name>` — e.g. `af_sky` (American female), `am_micha
 **Pronunciation.** Kokoro mispronounces some proper nouns and acronyms. `config/lexicon.toml`
 maps a word to misaki modified-IPA; the renderer rewrites it inline so Kokoro honors it.
 The shipped example covers common AI/tech/networking terms — extend it for your subject.
+
+### Pipeline configuration
+
+Each topic runs five Claude Code passes: `research → review → script → script_review →
+revise`. With no `config/pipeline.toml` they all run on the `claude` CLI's default model
+with one retry. Copy `config/pipeline.example.toml` to tune per stage:
+
+- **Per-stage model** — spend where it matters. `[pipeline.research] model = "opus"` for
+  the web-research pass, cheaper models elsewhere. `earworm run --model <m>` still forces
+  one model across every stage when you want a blunt override.
+- **Retry + fallback** — `retries` adds attempts on the primary model; `fallback_model`
+  makes one final attempt on a different model after the primary budget is exhausted
+  (independent of `retries`, so it fires even at `retries = 0`).
+- **Toggle quality passes** — `[pipeline.review] enabled = false` writes the script
+  straight from the report; `[pipeline.script_review] enabled = false` skips the
+  script-review *and* revise loop (revise exists only to fold the review back in). The
+  three load-bearing passes (research, script, and revise-when-reviewing) can't be toggled,
+  and stages can't be reordered — the order is a data dependency, not a preference.
 
 ## Publishing (optional)
 
@@ -161,7 +185,7 @@ key — the Worker never proxies it.
 ```
 prompts/        the five LLM prompts — the heart of it
 config/         *.example.toml templates (copy to real names; reals are gitignored)
-src/earworm/    cli, db, runner (Claude calls), render (TTS + tagging), normalize, tts/
+src/earworm/    cli, db, pipeline (stages + executor), runner, claude, render (TTS), normalize, tts/
 scripts/        cover generator, voice sampler
 worker/         Cloudflare Worker (TypeScript) for the optional private feed
 tests/          normalize + idempotency tests (run: uv run python tests/<file>)

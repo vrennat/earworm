@@ -1,11 +1,10 @@
-"""`earworm run` — drain one pending topic through research -> review -> script via Claude Code.
+"""`earworm run` — drain one pending topic through the generation pipeline.
 
-Research call (web search) writes runs/<run_id>/report.md.
-Review call reads the report and writes runs/<run_id>/review.md (adversarial pass).
-Script call reads report + review and writes inbox/scripts/<slug>.md.
-Script-review call reads the script and writes runs/<run_id>/script_review.md
-(adversarial pass on audio/flow); a revision call then folds that feedback back
-into the script in place. The renderer (earworm watch) picks up the script independently.
+The pipeline shape lives in `pipeline.py` (research -> review -> script ->
+script-review -> revise, each a Claude Code pass). This module is pure
+orchestration: pick a topic, build the run context, drive the active stages
+through the executor (per-stage model + retry + fallback), atomically expose the
+finished script to the renderer, and record status in the queue db.
 """
 from __future__ import annotations
 
@@ -16,14 +15,8 @@ from datetime import date
 from pathlib import Path
 from typing import Optional
 
-from . import claude, db
-from .config import paths
-
-RESEARCH_TOOLS = ("WebSearch", "WebFetch", "Read", "Write", "Edit")
-REVIEW_TOOLS = ("Read", "Write", "Edit")
-SCRIPT_TOOLS = ("Read", "Write", "Edit")
-SCRIPT_REVIEW_TOOLS = ("Read", "Write", "Edit")
-SCRIPT_REVISE_TOOLS = ("Read", "Write", "Edit")
+from . import db, pipeline
+from .config import paths, pipeline_config
 
 
 def slugify(text: str, maxlen: int = 60) -> str:
@@ -33,8 +26,17 @@ def slugify(text: str, maxlen: int = 60) -> str:
     return text[:maxlen].strip("-") or "topic"
 
 
+def _has_content(path: Path) -> bool:
+    return path.exists() and path.stat().st_size > 0
+
+
 def run_one(topic_id: Optional[int] = None, *, model: Optional[str] = None) -> dict:
-    """Process one topic. If topic_id is None, take the oldest pending item."""
+    """Process one topic. If topic_id is None, take the oldest pending item.
+
+    `model` is the CLI --model override: when set it forces the primary model for
+    every stage (per-stage config still supplies fallbacks). When None, each stage
+    uses its configured model or the pipeline default.
+    """
     db.init()
     row = db.get_topic(topic_id) if topic_id is not None else db.next_pending()
     if row is None:
@@ -47,129 +49,47 @@ def run_one(topic_id: Optional[int] = None, *, model: Optional[str] = None) -> d
     tid = int(row["id"])
     topic = row["topic"]
     today = date.today().isoformat()
-    slug = slugify(topic)
-    run_id = f"{today}-{tid:04d}-{slug}"
+    run_id = f"{today}-{tid:04d}-{slugify(topic)}"
 
     p = paths()
     p.ensure_dirs()
-    run_dir = p.runs / run_id
-    run_dir.mkdir(parents=True, exist_ok=True)
-    report_path = run_dir / "report.md"
-    review_path = run_dir / "review.md"
-    script_review_path = run_dir / "script_review.md"
-    # The script is generated and revised in the run dir (staging), then moved
-    # into inbox/scripts/ atomically at the very end. Writing it to inbox before
-    # the revision pass finished let a concurrent `earworm watch` render the
-    # intermediate version, then render the revised version as a second episode.
-    staged_script = run_dir / "script.md"
-    script_path = p.inbox_scripts / f"{run_id}.md"
-
-    def _has_content(path: Path) -> bool:
-        return path.exists() and path.stat().st_size > 0
+    cfg = pipeline.PipelineConfig.from_toml(pipeline_config())
+    stages = pipeline.active_stages(cfg)
+    ctx = pipeline.RunContext(
+        root=p.root,
+        prompts=p.prompts,
+        runs=p.runs,
+        inbox_scripts=p.inbox_scripts,
+        run_id=run_id,
+        topic=topic,
+        date=today,
+        # The script prompt only folds in a review when the review pass is active.
+        review_enabled=any(s.name == "review" for s in stages),
+    )
+    ctx.run_dir.mkdir(parents=True, exist_ok=True)
 
     db.mark_running(tid, run_id)
     try:
-        # 1. Research -> report.md (skip if a prior run already produced it)
-        if _has_content(report_path):
-            pass
-        else:
-            research_prompt = claude.render_prompt(
-                p.prompts / "research.md",
-                topic=topic,
-                date=today,
-                report_path=str(report_path),
-            )
-            claude.run(
-                research_prompt,
-                cwd=p.root,
-                allowed_tools=RESEARCH_TOOLS,
-                expect_file=report_path,
-                timeout=1800,
-                model=model,
-            )
+        for stage in stages:
+            # skip_if_exists stages resume from a prior partial run; script + revise
+            # always re-run so a re-queued topic gets a fresh script.
+            if stage.skip_if_exists and _has_content(stage.expect_file(ctx)):
+                continue
+            pipeline.run_stage(stage, ctx, cfg, cli_model=model)
 
-        # 2. Adversarial review -> review.md (skip if a prior run already produced it).
-        #    Makes the report smarter/more honest; handed to the script-writer as context.
-        if not _has_content(review_path):
-            review_prompt = claude.render_prompt(
-                p.prompts / "review.md",
-                report_path=str(report_path),
-                review_path=str(review_path),
-            )
-            claude.run(
-                review_prompt,
-                cwd=p.root,
-                allowed_tools=REVIEW_TOOLS,
-                expect_file=review_path,
-                timeout=900,
-                model=model,
-            )
-
-        # 3. Script -> runs/<run_id>/script.md (reads report + review)
-        script_prompt = claude.render_prompt(
-            p.prompts / "script.md",
-            date=today,
-            report_path=str(report_path),
-            review_path=str(review_path),
-            script_path=str(staged_script),
-            slug=run_id,
-        )
-        claude.run(
-            script_prompt,
-            cwd=p.root,
-            allowed_tools=SCRIPT_TOOLS,
-            expect_file=staged_script,
-            timeout=900,
-            model=model,
-        )
-
-        # 4. Script review -> runs/<run_id>/script_review.md (adversarial pass on
-        #    how the script will SOUND). Skip if a prior run already produced it.
-        if not _has_content(script_review_path):
-            script_review_prompt = claude.render_prompt(
-                p.prompts / "script_review.md",
-                script_path=str(staged_script),
-                script_review_path=str(script_review_path),
-            )
-            claude.run(
-                script_review_prompt,
-                cwd=p.root,
-                allowed_tools=SCRIPT_REVIEW_TOOLS,
-                expect_file=script_review_path,
-                timeout=900,
-                model=model,
-            )
-
-        # 5. Revision pass -> rewrites the staged script in place, folding in the
-        #    script-review feedback. Only after this completes is the script moved
-        #    into inbox/scripts/ (step 6), so the watcher renders it exactly once.
-        script_revise_prompt = claude.render_prompt(
-            p.prompts / "script_revise.md",
-            script_path=str(staged_script),
-            script_review_path=str(script_review_path),
-        )
-        claude.run(
-            script_revise_prompt,
-            cwd=p.root,
-            allowed_tools=SCRIPT_REVISE_TOOLS,
-            expect_file=staged_script,
-            timeout=900,
-            model=model,
-        )
-
-        # 6. Atomically expose the finished script to the watcher. os.replace is
-        #    an atomic rename within the same filesystem, so `earworm watch` never
-        #    observes a half-written or pre-revision file.
-        os.replace(staged_script, script_path)
+        # Atomically expose the finished (revised) script to the watcher. os.replace
+        # is an atomic rename within the filesystem, so `earworm watch` never sees a
+        # half-written or pre-revision file.
+        os.replace(ctx.staged_script, ctx.script_path)
     except Exception as exc:  # noqa: BLE001 - record failure, re-raise for CLI
         db.mark_failed(tid, f"{type(exc).__name__}: {exc}")
         raise
 
-    db.mark_done(tid, str(report_path), str(script_path))
+    db.mark_done(tid, str(ctx.report_path), str(ctx.script_path))
     return {
         "topic_id": tid,
         "topic": topic,
         "run_id": run_id,
-        "report_path": str(report_path),
-        "script_path": str(script_path),
+        "report_path": str(ctx.report_path),
+        "script_path": str(ctx.script_path),
     }

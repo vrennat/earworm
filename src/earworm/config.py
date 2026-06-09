@@ -87,6 +87,11 @@ def _load_toml(path: Path) -> dict:
         return tomllib.load(f)
 
 
+def pipeline_config() -> dict:
+    """Per-stage model / retry / toggle settings. Optional — every key defaults."""
+    return _load_toml(paths().config / "pipeline.toml")
+
+
 def voice_config() -> dict:
     return _load_toml(paths().config / "voice.toml")
 

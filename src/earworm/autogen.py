@@ -8,8 +8,8 @@ from __future__ import annotations
 
 from datetime import date
 
-from . import claude, db
-from .config import paths
+from . import claude, db, pipeline
+from .config import paths, pipeline_config
 
 
 def recent_titles(limit: int = 40) -> list[str]:
@@ -42,7 +42,20 @@ def generate(count: int = 3, model: str | None = None) -> list[str]:
         interests=interests.strip() or "(no interests file)",
         recent="\n".join(f"- {t}" for t in recent) or "(nothing yet)",
     )
-    text = claude.run_text(prompt, cwd=p.root, timeout=300, model=model)
+
+    # autogen is a one-shot text generation, but it gets the same model + retry
+    # treatment as the pipeline stages, keyed `[pipeline.autogen]`.
+    cfg = pipeline.PipelineConfig.from_toml(pipeline_config())
+    sc = cfg.for_stage("autogen")
+    chosen = pipeline.resolve_model(model, sc.model, cfg.default_model)
+    retries = cfg.default_retries if sc.retries is None else sc.retries
+    timeout = 300 if sc.timeout is None else sc.timeout
+    text = pipeline.with_retry(
+        lambda m: claude.run_text(prompt, cwd=p.root, timeout=timeout, model=m),
+        model=chosen,
+        retries=retries,
+        fallback_model=sc.fallback_model,
+    )
 
     proposed = [line.strip().lstrip("-*0123456789. \t").strip() for line in text.splitlines()]
     seen = {t.lower() for t in recent}

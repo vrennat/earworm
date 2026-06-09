@@ -1,0 +1,52 @@
+# =============================================================================
+# Pipeline — per-stage model, retry, and toggle settings  (copy to pipeline.toml)
+# =============================================================================
+# Earworm runs five Claude Code passes per topic:
+#
+#   research -> review -> script -> script_review -> revise
+#
+# Every setting here is OPTIONAL — with no pipeline.toml the pipeline runs all
+# five passes on the claude CLI's default model with one retry each. Tune only
+# what you care about. `earworm run --model <m>` overrides the primary model for
+# every stage at once, regardless of what is set below.
+
+[pipeline]
+default_model   = "sonnet"   # primary model for any stage without its own `model`
+default_retries = 1          # retries (beyond the first attempt) for any stage
+                             #   without its own `retries`
+
+# --- Per-stage overrides. Stage table keys: research | review | script |
+#     script_review | revise | autogen. Any field may be omitted.
+#
+#       model          primary model for this stage
+#       timeout        seconds before the stage is killed and counts as a failure
+#       retries        extra attempts on the primary model after the first
+#       fallback_model one final attempt with this model after the primary budget
+#                      is exhausted (independent of `retries` — tried even at 0)
+#       enabled        review / script_review only: drop the pass (see below)
+
+[pipeline.research]
+model          = "opus"      # research drives web search; worth the spend
+timeout        = 1800        # web research is the slowest pass
+retries        = 2
+fallback_model = "sonnet"    # if opus keeps failing, finish on sonnet
+
+[pipeline.review]
+enabled = true               # adversarial pass over the report. false -> the
+                             #   script is written straight from the report.
+
+[pipeline.script]
+model = "sonnet"
+
+[pipeline.script_review]
+enabled = true               # the script-review + revise loop. false skips BOTH
+                             #   (revise exists only to fold the review back in).
+
+[pipeline.revise]
+model = "sonnet"
+
+# `autogen` is the `earworm autogen` topic proposer — a one-shot generation that
+# shares the same model + retry machinery.
+[pipeline.autogen]
+model   = "haiku"
+retries = 1

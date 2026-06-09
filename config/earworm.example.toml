@@ -6,6 +6,7 @@
 # At runtime the pipeline reads these as SEPARATE files in config/ (copy each
 # *.example.toml to its real name):
 #
+#   config/pipeline.toml <- pipeline.example.toml   (optional, tunes generation)
 #   config/voice.toml    <- voice.example.toml      (required for rendering)
 #   config/show.toml     <- show.example.toml       (required for rendering)
 #   config/lexicon.toml  <- lexicon.example.toml    (optional, recommended)
@@ -14,6 +15,31 @@
 #
 # Secrets and the ANTHROPIC_API_KEY live outside this file — see .env.example.
 # =============================================================================
+
+
+# ----- [pipeline.toml] Generation: per-stage model / retry / toggles ----------
+# Five Claude Code passes per topic: research -> review -> script ->
+# script_review -> revise. All optional; omitting pipeline.toml runs every pass on
+# the claude default model with one retry. `earworm run --model <m>` overrides the
+# primary model for all stages at once. See pipeline.example.toml for full notes.
+[pipeline]
+default_model   = "sonnet"   # primary model for stages without their own `model`
+default_retries = 1          # extra attempts (beyond the first) per stage
+
+[pipeline.research]
+model          = "opus"      # research drives web search; worth the spend
+timeout        = 1800
+retries        = 2
+fallback_model = "sonnet"    # finish on sonnet if opus keeps failing
+
+[pipeline.review]
+enabled = true               # adversarial report review; false -> skip it
+
+[pipeline.script_review]
+enabled = true               # script-review + revise loop; false skips BOTH
+
+[pipeline.autogen]
+model   = "haiku"            # the `earworm autogen` topic proposer
 
 
 # ----- [voice.toml] Voice / TTS -----------------------------------------------
