@@ -1,0 +1,39 @@
+# Keep the build context small and deterministic. Mirrors .gitignore plus repo
+# cruft that should never enter an image.
+
+# VCS + docs + editor state
+.git/
+.github/
+docs/
+.claude/
+.DS_Store
+
+# Python build/venv artifacts (the image builds its own venv via uv)
+.venv/
+.uv/
+__pycache__/
+*.pyc
+*.egg-info/
+build/
+dist/
+
+# Local config + secrets (provided at runtime via the mounted /data volume)
+config/*.toml
+!config/*.example.toml
+.env
+
+# Runtime data (generated, never baked into an image)
+*.db
+*.db-*
+inbox/
+done/
+runs/
+episodes/
+samples/
+logs/
+*.mp3
+*.wav
+config/cover.png
+
+# Cloudflare worker (out of scope for the renderer image)
+worker/

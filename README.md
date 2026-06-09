@@ -42,6 +42,7 @@ earworm list                 inspect the queue
 earworm run [--id N] [--all] drain pending topic(s): research -> review -> script
 earworm watch                render new scripts -> mp3 (+ publish), long-running
 earworm render <file.md>     one-shot render of a single script (testing)
+earworm download-models      pre-fetch the Kokoro model + voices (warm the cache)
 earworm publish              retry upload + register for any unpublished episodes
 ```
 
@@ -169,6 +170,37 @@ The Worker serves a token-gated `/<FEED_TOKEN>/feed.xml` (valid podcast RSS 2.0 
 iTunes namespace). Audio is served directly from the public R2 bucket under an unguessable
 key — the Worker never proxies it.
 
+## Docker
+
+The painful part to install is the renderer — CPU PyTorch, Kokoro, espeak-ng, ffmpeg.
+The bundled image owns all of that and bakes in a pre-warmed Kokoro model, so rendering
+works out of the box. It is **CPU-only** (the default Linux torch wheel bundles CUDA at
+~2GB; the build selects the CPU PyTorch index via `UV_TORCH_BACKEND=cpu`).
+
+```sh
+docker build -t earworm .                          # ~minutes; downloads torch + model
+
+# Render: mount your working dir (config/*.toml, inbox/, episodes/, earworm.db) at /data
+docker run --rm -v "$PWD":/data earworm watch        # render scripts as they appear
+docker run --rm -v "$PWD":/data earworm render inbox/scripts/<id>.md   # one-shot
+```
+
+Earworm's two halves share only a folder, so the natural split is **generate on the host,
+render in the container** — they meet at `inbox/scripts/`. Generation (`earworm run`) needs
+the authenticated `claude` CLI, which isn't in the image. To also generate in-container,
+install the CLI and pass a key:
+
+```sh
+docker run --rm -v "$PWD":/data -e ANTHROPIC_API_KEY=sk-... earworm run
+```
+
+(That still requires the `claude` CLI on `PATH` inside the image — add it to the Dockerfile
+with a Node layer if you want a single do-everything container. The default image keeps
+generation on the host.)
+
+The model is downloaded at **build** time (`earworm download-models` runs in the build and
+smoke-tests a synth), so first render is instant and a broken stack fails the build, not you.
+
 ## NOT in v1
 
 - **A hosted/managed service.** This is a local CLI you run yourself.
@@ -188,7 +220,8 @@ config/         *.example.toml templates (copy to real names; reals are gitignor
 src/earworm/    cli, db, pipeline (stages + executor), runner, claude, render (TTS), normalize, tts/
 scripts/        cover generator, voice sampler
 worker/         Cloudflare Worker (TypeScript) for the optional private feed
-tests/          normalize + idempotency tests (run: uv run python tests/<file>)
+tests/          pipeline + normalize + idempotency tests (run: uv run python tests/<file>)
+Dockerfile      CPU-only renderer image (Kokoro + ffmpeg, pre-warmed model)
 ```
 
 ## License

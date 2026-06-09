@@ -7,6 +7,7 @@ Commands:
   earworm run [--id N]         drain one pending topic (research -> script)
   earworm watch                watch inbox/scripts and render new scripts to mp3
   earworm render <file.md>     render a single script file (one-shot, for testing)
+  earworm download-models      pre-fetch the Kokoro model + voices (warm the cache)
 """
 from __future__ import annotations
 
@@ -124,6 +125,17 @@ def _cmd_render(args: argparse.Namespace) -> int:
     return 0
 
 
+def _cmd_download_models(args: argparse.Namespace) -> int:
+    from .tts.download import download_models
+
+    try:
+        download_models(verify=not args.no_verify)
+    except Exception as exc:  # noqa: BLE001
+        print(f"download failed: {type(exc).__name__}: {exc}", file=sys.stderr)
+        return 1
+    return 0
+
+
 def _cmd_publish(args: argparse.Namespace) -> int:
     from . import render
 
@@ -170,6 +182,12 @@ def build_parser() -> argparse.ArgumentParser:
     p_render.add_argument("file", help="path to a script .md")
     p_render.add_argument("--no-publish", action="store_true", help="render only, don't upload/register")
     p_render.set_defaults(func=_cmd_render)
+
+    p_dl = sub.add_parser("download-models", help="pre-fetch the Kokoro model + voices")
+    p_dl.add_argument(
+        "--no-verify", action="store_true", help="download only; skip the synth smoke check"
+    )
+    p_dl.set_defaults(func=_cmd_download_models)
 
     sub.add_parser("publish", help="upload + register any unpublished episodes").set_defaults(
         func=_cmd_publish
