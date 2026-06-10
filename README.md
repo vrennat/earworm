@@ -28,7 +28,7 @@ earworm download-models        # one-time: fetch the Kokoro voice model + G2P da
 **From source** (to tune the prompts — they're the product):
 
 ```sh
-git clone https://github.com/tannervass/earworm && cd earworm
+git clone https://github.com/vrennat/earworm && cd earworm
 uv sync                        # .venv + locked deps (incl. Kokoro + torch)
 uv run earworm download-models
 ```
