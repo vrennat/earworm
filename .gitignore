@@ -29,6 +29,7 @@ logs/
 
 # Cover art (generated; run scripts/make_cover.py)
 config/cover.png
+worker/cover.png
 
 # Worker — only wrangler.example.jsonc is tracked (bun.lock IS committed for
 # reproducible deploys; see worker/.gitignore)
