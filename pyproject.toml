@@ -1,17 +1,41 @@
 [project]
 name = "earworm"
 version = "0.1.0"
-description = "Research-to-podcast pipeline: topic in, narrated episode out."
+description = "Give it a topic, get back a narrated podcast episode — researched by Claude, voiced by a local Kokoro model."
+readme = "README.md"
 requires-python = ">=3.11"
+license = { file = "LICENSE" }
+authors = [{ name = "Tanner Vass" }]
+keywords = ["podcast", "tts", "text-to-speech", "kokoro", "claude", "rss", "ai", "research"]
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Environment :: Console",
+    "Intended Audience :: Developers",
+    "License :: OSI Approved :: MIT License",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Topic :: Multimedia :: Sound/Audio :: Speech",
+    "Topic :: Text Processing :: Linguistic",
+    "Operating System :: MacOS",
+    "Operating System :: POSIX :: Linux",
+]
 dependencies = [
     "kokoro>=0.9.4",
     "soundfile>=0.12",
     "mutagen>=1.47",
-    # spaCy English model used by Kokoro's misaki G2P; pinned so installs are
-    # deterministic and offline-capable (otherwise it is re-fetched at runtime).
-    "en-core-web-sm @ https://github.com/explosion/spacy-models/releases/download/en_core_web_sm-3.8.0/en_core_web_sm-3.8.0-py3-none-any.whl",
     "pillow>=12.2.0",
+    # NOTE: Kokoro's misaki G2P also needs the spaCy model `en_core_web_sm`. It is
+    # NOT listed here because it ships only as a GitHub release wheel (a direct URL),
+    # which PyPI rejects in package metadata. `earworm download-models` installs the
+    # pinned wheel after install; the Dockerfile runs that at build time.
 ]
+
+[project.urls]
+# TODO(launch): confirm the real GitHub URL before publishing to PyPI.
+Homepage = "https://github.com/tannervass/earworm"
+Repository = "https://github.com/tannervass/earworm"
+Issues = "https://github.com/tannervass/earworm/issues"
 
 [project.scripts]
 earworm = "earworm.cli:main"
@@ -19,9 +43,6 @@ earworm = "earworm.cli:main"
 [build-system]
 requires = ["hatchling"]
 build-backend = "hatchling.build"
-
-[tool.hatch.metadata]
-allow-direct-references = true
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/earworm"]

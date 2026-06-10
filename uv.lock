@@ -512,7 +512,6 @@ name = "earworm"
 version = "0.1.0"
 source = { editable = "." }
 dependencies = [
-    { name = "en-core-web-sm" },
     { name = "kokoro" },
     { name = "mutagen" },
     { name = "pillow" },
@@ -521,19 +520,10 @@ dependencies = [
 
 [package.metadata]
 requires-dist = [
-    { name = "en-core-web-sm", url = "https://github.com/explosion/spacy-models/releases/download/en_core_web_sm-3.8.0/en_core_web_sm-3.8.0-py3-none-any.whl" },
     { name = "kokoro", specifier = ">=0.9.4" },
     { name = "mutagen", specifier = ">=1.47" },
     { name = "pillow", specifier = ">=12.2.0" },
     { name = "soundfile", specifier = ">=0.12" },
-]
-
-[[package]]
-name = "en-core-web-sm"
-version = "3.8.0"
-source = { url = "https://github.com/explosion/spacy-models/releases/download/en_core_web_sm-3.8.0/en_core_web_sm-3.8.0-py3-none-any.whl" }
-wheels = [
-    { url = "https://github.com/explosion/spacy-models/releases/download/en_core_web_sm-3.8.0/en_core_web_sm-3.8.0-py3-none-any.whl", hash = "sha256:1932429db727d4bff3deed6b34cfc05df17794f4a52eeb26cf8928f7c1a0fb85" },
 ]
 
 [[package]]
