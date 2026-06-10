@@ -1,0 +1,37 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- Queue drainer: research + script for ONE pending topic, weekdays at 07:30.
+     One per weekday (max 5/week) but in practice capped by the topics autogen
+     proposes each Monday, keeping output at ~2-3 episodes (<=30 min) per week. -->
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <key>Label</key>
+    <string>com.earworm.run</string>
+    <key>ProgramArguments</key>
+    <array>
+        <string>__EARWORM_DIR__/.venv/bin/earworm</string>
+        <string>run</string>
+    </array>
+    <key>WorkingDirectory</key>
+    <string>__EARWORM_DIR__</string>
+    <key>EnvironmentVariables</key>
+    <dict>
+        <key>PATH</key>
+        <string>__PATH__</string>
+        <key>HOME</key>
+        <string>__HOME__</string>
+    </dict>
+    <key>StartCalendarInterval</key>
+    <array>
+        <dict><key>Weekday</key><integer>1</integer><key>Hour</key><integer>7</integer><key>Minute</key><integer>30</integer></dict>
+        <dict><key>Weekday</key><integer>2</integer><key>Hour</key><integer>7</integer><key>Minute</key><integer>30</integer></dict>
+        <dict><key>Weekday</key><integer>3</integer><key>Hour</key><integer>7</integer><key>Minute</key><integer>30</integer></dict>
+        <dict><key>Weekday</key><integer>4</integer><key>Hour</key><integer>7</integer><key>Minute</key><integer>30</integer></dict>
+        <dict><key>Weekday</key><integer>5</integer><key>Hour</key><integer>7</integer><key>Minute</key><integer>30</integer></dict>
+    </array>
+    <key>StandardOutPath</key>
+    <string>__EARWORM_DIR__/logs/run.log</string>
+    <key>StandardErrorPath</key>
+    <string>__EARWORM_DIR__/logs/run.log</string>
+</dict>
+</plist>

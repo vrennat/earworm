@@ -1,0 +1,32 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- Renderer daemon: watches inbox/scripts, renders + publishes. Always running.
+     Tokens (__EARWORM_DIR__ etc.) are substituted by launchd/install.sh. -->
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <key>Label</key>
+    <string>com.earworm.watch</string>
+    <key>ProgramArguments</key>
+    <array>
+        <string>__EARWORM_DIR__/.venv/bin/earworm</string>
+        <string>watch</string>
+    </array>
+    <key>WorkingDirectory</key>
+    <string>__EARWORM_DIR__</string>
+    <key>EnvironmentVariables</key>
+    <dict>
+        <key>PATH</key>
+        <string>__PATH__</string>
+        <key>HOME</key>
+        <string>__HOME__</string>
+    </dict>
+    <key>RunAtLoad</key>
+    <true/>
+    <key>KeepAlive</key>
+    <true/>
+    <key>StandardOutPath</key>
+    <string>__EARWORM_DIR__/logs/watch.log</string>
+    <key>StandardErrorPath</key>
+    <string>__EARWORM_DIR__/logs/watch.log</string>
+</dict>
+</plist>

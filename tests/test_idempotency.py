@@ -86,6 +86,18 @@ def test_unique_slug_index_blocks_raw_duplicate_insert(tmp: str) -> None:
     assert raised, "unique slug index must block a duplicate row"
 
 
+def test_reset_stale_running_requeues_crashed_topics(tmp: str) -> None:
+    db = _fresh_db(tmp)
+    tid = db.add_topic("a crashed topic", source="manual")
+    db.mark_running(tid, "2026-06-09-0001-a-crashed-topic")
+    assert db.get_topic(tid)["status"] == "running"
+
+    n = db.reset_stale_running()
+
+    assert n == 1, "one running topic should be reset"
+    assert db.get_topic(tid)["status"] == "pending", "crashed topic must return to the queue"
+
+
 def test_r2_key_is_stable_per_guid(tmp: str) -> None:
     from earworm import feed
 

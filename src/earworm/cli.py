@@ -5,6 +5,7 @@ Commands:
   earworm add "<topic>"        queue a topic (--source manual|auto)
   earworm list                 show the queue
   earworm run [--id N]         drain one pending topic (research -> script)
+  earworm reset-stale          requeue topics stuck 'running' after a crash
   earworm watch                watch inbox/scripts and render new scripts to mp3
   earworm render <file.md>     render a single script file (one-shot, for testing)
   earworm download-models      pre-fetch the Kokoro model + voices (warm the cache)
@@ -125,6 +126,13 @@ def _cmd_render(args: argparse.Namespace) -> int:
     return 0
 
 
+def _cmd_reset_stale(args: argparse.Namespace) -> int:
+    db.init()
+    n = db.reset_stale_running()
+    print(f"reset {n} stale running topic(s) to pending")
+    return 0
+
+
 def _cmd_download_models(args: argparse.Namespace) -> int:
     from .tts.download import download_models
 
@@ -168,6 +176,10 @@ def build_parser() -> argparse.ArgumentParser:
     p_run.add_argument("--all", action="store_true", help="drain every pending topic")
     p_run.add_argument("--model", default=None, help="override Claude model (e.g. sonnet)")
     p_run.set_defaults(func=_cmd_run)
+
+    sub.add_parser(
+        "reset-stale", help="requeue topics stuck 'running' after a crash"
+    ).set_defaults(func=_cmd_reset_stale)
 
     p_autogen = sub.add_parser("autogen", help="propose + queue fresh topics from interests.md")
     p_autogen.add_argument("--count", type=int, default=3, help="how many topics to propose")

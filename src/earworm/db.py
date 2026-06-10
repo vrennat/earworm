@@ -151,6 +151,13 @@ def mark_failed(topic_id: int, error: str) -> None:
         )
 
 
+def reset_stale_running() -> int:
+    """Return 'running' items to 'pending' (e.g. after a crash). Returns count reset."""
+    with connect() as conn:
+        cur = conn.execute("UPDATE topics SET status='pending' WHERE status='running'")
+        return cur.rowcount
+
+
 # --- episodes ledger ------------------------------------------------------
 
 def get_episode_by_slug(slug: str) -> Optional[sqlite3.Row]:
