@@ -12,6 +12,9 @@ config/*.toml
 !config/*.example.toml
 .env
 
+# Personal interests for `earworm autogen` — only interests.example.md is tracked
+interests.md
+
 # Runtime data (generated, never committed)
 *.db
 *.db-*
@@ -27,12 +30,12 @@ logs/
 # Cover art (generated; run scripts/make_cover.py)
 config/cover.png
 
-# Worker — only wrangler.example.jsonc is tracked
+# Worker — only wrangler.example.jsonc is tracked (bun.lock IS committed for
+# reproducible deploys; see worker/.gitignore)
 worker/node_modules/
 worker/.wrangler/
 worker/.dev.vars
 worker/wrangler.jsonc
-worker/bun.lock
 
 # Local session / editor state
 .claude/

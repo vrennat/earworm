@@ -1,0 +1,7 @@
+# Self-protecting ignores for the worker dir (the repo root .gitignore also covers
+# these). bun.lock is intentionally committed for reproducible deploys.
+node_modules/
+.wrangler/
+.dev.vars
+wrangler.jsonc
+*.db
