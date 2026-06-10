@@ -1,5 +1,9 @@
 # Earworm
 
+[![PyPI](https://img.shields.io/pypi/v/earworm.svg)](https://pypi.org/project/earworm/)
+[![Python](https://img.shields.io/pypi/pyversions/earworm.svg)](https://pypi.org/project/earworm/)
+[![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
+
 Give it a topic; get back a narrated podcast episode. Earworm researches the topic
 with the Claude CLI, runs the findings through an adversarial review, rewrites them
 into a script written *for the ear*, narrates it with a local neural voice (Kokoro),
@@ -8,30 +12,46 @@ publishes to a private podcast feed you can subscribe to on your phone. Generati
 (LLM, occasionally slow) is fully decoupled from rendering (local, fast, deterministic) —
 they only ever communicate through a folder of script files.
 
-## 30-second quickstart
+## Install
 
-Earworm uses [uv](https://docs.astral.sh/uv/). `uv sync` reads `.python-version`
-(3.11), provisions the interpreter if needed, and installs the locked deps.
+Earworm needs **Python 3.11+**, [`ffmpeg`](https://ffmpeg.org/), and — for the research
+and scripting passes — the authenticated [`claude`](https://docs.claude.com/en/docs/claude-code/overview)
+CLI on your `PATH`. Narration is fully local; no API key needed for the voice.
+
+**From PyPI:**
 
 ```sh
-# Requirements: uv, ffmpeg, and the `claude` CLI (authenticated). uv handles Python.
-git clone <your-fork> earworm && cd earworm
-
-uv sync                                   # create .venv + install locked deps (incl. Kokoro + torch)
-cp config/voice.example.toml  config/voice.toml
-cp config/show.example.toml   config/show.toml
-cp config/lexicon.example.toml config/lexicon.toml
-
-uv run earworm init                       # create data dirs + queue db
-uv run earworm add "What is the current state of small language models, and why does it matter?"
-uv run earworm run                        # research -> review -> script  (writes inbox/scripts/<id>.md)
-uv run earworm watch                      # render scripts -> episodes/<id>.mp3  (long-running)
+pip install earworm            # or: uv tool install earworm
+earworm download-models        # one-time: fetch the Kokoro voice model + G2P data (~few hundred MB)
 ```
 
-The first synthesis downloads the Kokoro model (~few hundred MB) and warms up in ~30s;
-after that the watcher stays warm and synthesis runs faster than real time. For better
-proper-noun pronunciation, optionally `brew install espeak-ng` (Kokoro's misaki G2P uses
-it as an out-of-vocabulary fallback; it degrades gracefully without it).
+**From source** (to tune the prompts — they're the product):
+
+```sh
+git clone https://github.com/tannervass/earworm && cd earworm
+uv sync                        # .venv + locked deps (incl. Kokoro + torch)
+uv run earworm download-models
+```
+
+Recommended for proper-noun pronunciation: `brew install espeak-ng` (Linux:
+`apt install espeak-ng`). Kokoro's misaki G2P uses it as an out-of-vocabulary fallback
+and degrades gracefully without it.
+
+## Quickstart
+
+```sh
+earworm init                   # scaffold prompts/ + config templates + queue db here
+cp config/show.example.toml config/show.toml     # set your podcast title/author (optional)
+
+earworm add "What is the current state of small language models, and why does it matter?"
+earworm run                    # research -> review -> script  (writes inbox/scripts/<id>.md)
+earworm watch                  # render scripts -> episodes/<id>.mp3  (long-running)
+```
+
+From a source checkout, prefix commands with `uv run` (e.g. `uv run earworm init`). The
+first synthesis warms up in ~30s; after that the watcher stays warm and renders faster
+than real time. With no config files at all, narration uses a sensible default voice —
+customize it in `config/voice.toml`.
 
 ## Commands
 
@@ -40,6 +60,7 @@ earworm add "<topic>"        queue a topic
 earworm autogen --count 3    propose + queue topics from interests.md
 earworm list                 inspect the queue
 earworm run [--id N] [--all] drain pending topic(s): research -> review -> script
+earworm reset-stale          requeue topics stuck 'running' after a crash
 earworm watch                render new scripts -> mp3 (+ publish), long-running
 earworm render <file.md>     one-shot render of a single script (testing)
 earworm download-models      pre-fetch the Kokoro model + voices (warm the cache)
@@ -156,19 +177,53 @@ with one retry. Copy `config/pipeline.example.toml` to tune per stage:
   three load-bearing passes (research, script, and revise-when-reviewing) can't be toggled,
   and stages can't be reordered — the order is a data dependency, not a preference.
 
-## Publishing (optional)
+## Publishing — a private podcast feed (optional)
 
-Local-only use needs none of this — episodes render to `episodes/*.mp3` and carry full
-ID3 tags. To subscribe on a phone, deploy the Cloudflare Worker in `worker/`:
+Local-only use needs none of this: episodes render to `episodes/*.mp3` with full ID3 tags
+that any player reads. To subscribe on your phone, deploy the bundled Cloudflare Worker
+(`worker/`) — a token-gated RSS feed backed by D1, with audio served from a public R2
+bucket. Everything is free-tier at personal volume. Uses [bun](https://bun.sh).
 
-1. `cp worker/wrangler.example.jsonc worker/wrangler.jsonc` and fill in your account/D1 IDs.
-2. Provision a D1 database (`worker/schema.sql`) and a **public** R2 bucket.
-3. Set `FEED_TOKEN` and `INGEST_SECRET` (`wrangler secret put ...`; `.dev.vars` for local).
-4. `wrangler deploy`, then set `enabled = true` in `config/feed.toml`.
+```sh
+cd worker
+bun install                                        # pins wrangler + types (commit-tracked lockfile)
+cp wrangler.example.jsonc wrangler.jsonc           # fill in account_id, D1 id, show vars
+
+# Provision Cloudflare resources
+bunx wrangler d1 create earworm                     # paste the printed database_id into wrangler.jsonc
+bunx wrangler d1 execute earworm --remote --file schema.sql
+# create a PUBLIC R2 bucket in the dashboard; note its pub-*.r2.dev base URL
+
+# Secrets (token-gates the feed + the ingest endpoint)
+bunx wrangler secret put FEED_TOKEN
+bunx wrangler secret put INGEST_SECRET
+
+bunx wrangler deploy
+```
+
+Then point the Python side at it — in `config/feed.toml` set `enabled = true`, the
+`worker_url`, R2 `bucket`, and `public_audio_base`; put `FEED_TOKEN`/`INGEST_SECRET` in
+`config/secrets.toml` (or the matching env vars). After that, `earworm watch` uploads each
+new episode to R2 and registers it with the Worker; `earworm publish` backfills any that
+failed.
 
 The Worker serves a token-gated `/<FEED_TOKEN>/feed.xml` (valid podcast RSS 2.0 with the
-iTunes namespace). Audio is served directly from the public R2 bucket under an unguessable
-key — the Worker never proxies it.
+iTunes namespace) — also reachable as `/feed.xml?token=…` for finicky apps. Audio is served
+directly from the public R2 bucket under an unguessable per-episode key; the Worker never
+proxies bytes. A bad token returns 404 (not 401), so the feed's existence never leaks.
+
+## Scheduling (macOS)
+
+For hands-off operation, `launchd/` ships three agents — a `watch` daemon (renders +
+publishes continuously), a weekday `run` (drains one topic at 07:30), and a Monday
+`autogen` (proposes 3 fresh topics from `interests.md`):
+
+```sh
+bash launchd/install.sh        # substitutes paths, loads the agents, starts the watcher
+bash launchd/uninstall.sh      # unload + remove them
+```
+
+Logs land in `logs/`. On Linux, adapt the three `.plist` files to systemd timers.
 
 ## Docker
 
@@ -204,8 +259,6 @@ smoke-tests a synth), so first render is instant and a broken stack fails the bu
 ## NOT in v1
 
 - **A hosted/managed service.** This is a local CLI you run yourself.
-- **Scheduling / daemonization.** No bundled launchd/systemd/cron units — wrap `earworm run`
-  and `earworm watch` with your OS's scheduler if you want hands-off operation.
 - **Multi-voice / dialogue.** Single narrator only.
 - **A web UI.** CLI only.
 - **Music, stingers, or ad insertion.** Voice + mastering only.
@@ -215,12 +268,13 @@ smoke-tests a synth), so first render is instant and a broken stack fails the bu
 ## Layout
 
 ```
-prompts/        the five LLM prompts — the heart of it
+prompts/        the five LLM prompts — the heart of it (bundled into the wheel too)
 config/         *.example.toml templates (copy to real names; reals are gitignored)
 src/earworm/    cli, db, pipeline (stages + executor), runner, claude, render (TTS), normalize, tts/
-scripts/        cover generator, voice sampler
-worker/         Cloudflare Worker (TypeScript) for the optional private feed
-tests/          pipeline + normalize + idempotency tests (run: uv run python tests/<file>)
+scripts/        cover generator, voice sampler, regen/render/rerender helpers
+launchd/        macOS agents: watch daemon + weekday run + Monday autogen
+worker/         Cloudflare Worker (TypeScript, bun) — token-gated RSS feed over D1 + R2
+tests/          pipeline + config + normalize + idempotency tests (run: uv run python tests/<file>)
 Dockerfile      CPU-only renderer image (Kokoro + ffmpeg, pre-warmed model)
 ```
 
