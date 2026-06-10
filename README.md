@@ -1,7 +1,7 @@
 # Earworm
 
-[![PyPI](https://img.shields.io/pypi/v/earworm.svg)](https://pypi.org/project/earworm/)
-[![Python](https://img.shields.io/pypi/pyversions/earworm.svg)](https://pypi.org/project/earworm/)
+[![PyPI](https://img.shields.io/pypi/v/earworm-pod.svg)](https://pypi.org/project/earworm-pod/)
+[![Python](https://img.shields.io/pypi/pyversions/earworm-pod.svg)](https://pypi.org/project/earworm-pod/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 
 Give it a topic; get back a narrated podcast episode. Earworm researches the topic
@@ -21,7 +21,7 @@ CLI on your `PATH`. Narration is fully local; no API key needed for the voice.
 **From PyPI:**
 
 ```sh
-pip install earworm            # or: uv tool install earworm
+pip install earworm-pod        # or: uv tool install earworm-pod  (the CLI is still `earworm`)
 earworm download-models        # one-time: fetch the Kokoro voice model + G2P data (~few hundred MB)
 ```
 

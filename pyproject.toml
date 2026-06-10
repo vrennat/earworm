@@ -1,5 +1,8 @@
 [project]
-name = "earworm"
+# PyPI distribution name. The importable package + CLI stay `earworm` (see
+# [project.scripts] and [tool.hatch...packages]); only the published dist name is
+# `earworm-pod` because `earworm` was already taken on PyPI by an unrelated project.
+name = "earworm-pod"
 version = "0.1.0"
 description = "Give it a topic, get back a narrated podcast episode — researched by Claude, voiced by a local Kokoro model."
 readme = "README.md"
