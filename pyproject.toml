@@ -46,3 +46,22 @@ build-backend = "hatchling.build"
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/earworm"]
+# Guard: never bake a user's real (possibly secret-bearing) config into the wheel —
+# only the *.example.toml templates are bundled. Belt-and-suspenders; the repo only
+# tracks examples anyway.
+exclude = [
+    "earworm/_assets/config/voice.toml",
+    "earworm/_assets/config/show.toml",
+    "earworm/_assets/config/lexicon.toml",
+    "earworm/_assets/config/pipeline.toml",
+    "earworm/_assets/config/feed.toml",
+    "earworm/_assets/config/secrets.toml",
+    "earworm/_assets/config/earworm.toml",
+    "earworm/_assets/config/cover.png",
+]
+
+# Bundle the prompts + config templates as package data so a `pip install earworm`
+# (which only ships src/earworm) can still run and `earworm init` can scaffold them.
+[tool.hatch.build.targets.wheel.force-include]
+"prompts" = "earworm/_assets/prompts"
+"config" = "earworm/_assets/config"

@@ -29,17 +29,19 @@ ENV UV_TORCH_BACKEND=cpu \
 WORKDIR /app
 
 # Install deps in a cached layer. The project installs too (it provides the `earworm`
-# console script), so src/ must be present for the build backend.
+# console script), so src/ must be present for the build backend. prompts/ + config/
+# must also be present BEFORE sync: the wheel build force-includes them as package
+# data (see pyproject), and --no-editable forces a built install so that bundling
+# actually runs. .dockerignore keeps real configs out of the build context.
 COPY pyproject.toml uv.lock .python-version ./
 COPY src ./src
-RUN uv sync --no-dev
+COPY prompts ./prompts
+COPY config ./config
+RUN uv sync --no-dev --no-editable
 
 # Bake a warm Kokoro cache (model + voices) into the image and smoke-test the full
 # render chain at BUILD time. A broken stack fails the build, not the user's first run.
 RUN uv run earworm download-models
-
-# Prompts ship too, so the image can optionally generate (with the claude CLI + key).
-COPY prompts ./prompts
 
 # User data — config/*.toml, inbox/scripts/, episodes/, earworm.db — lives on a mounted
 # volume. Mount your working directory:  docker run -v "$PWD":/data earworm watch

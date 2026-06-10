@@ -17,13 +17,23 @@ import sys
 from pathlib import Path
 
 from . import db
-from .config import paths
+from .config import paths, scaffold_workspace
 
 
 def _cmd_init(args: argparse.Namespace) -> int:
-    db.init()
     p = paths()
+    # When installed from PyPI the working dir has no prompts/config; lay down
+    # editable copies from the bundled templates. No-op in a source checkout.
+    copied = scaffold_workspace(p)
+    db.init()
     print(f"initialized earworm at {p.root}")
+    if copied["prompts"]:
+        print(f"  prompts: {len(copied['prompts'])} file(s) -> {p.root / 'prompts'}")
+    if copied["config"]:
+        print(
+            f"  config:  {len(copied['config'])} template(s) -> {p.config} "
+            "(copy <name>.example.toml -> <name>.toml and edit)"
+        )
     print(f"  db:     {p.db}")
     print(f"  inbox:  {p.inbox_scripts}")
     return 0

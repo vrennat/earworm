@@ -7,10 +7,16 @@ Override the root with the EARWORM_HOME environment variable.
 from __future__ import annotations
 
 import os
+import shutil
 import tomllib
 from dataclasses import dataclass
 from functools import lru_cache
 from pathlib import Path
+
+# Prompts + config templates bundled into the wheel (see pyproject force-include).
+# Present in an installed package; absent in a source checkout (which uses its own
+# repo-root prompts/ and config/ instead).
+_ASSETS = Path(__file__).resolve().parent / "_assets"
 
 
 def project_root() -> Path:
@@ -34,7 +40,10 @@ class Paths:
 
     @property
     def prompts(self) -> Path:
-        return self.root / "prompts"
+        """Local prompts/ if the working dir has them (clone, or after `earworm
+        init`), else the prompts bundled in the installed package."""
+        local = self.root / "prompts"
+        return local if local.exists() else _ASSETS / "prompts"
 
     @property
     def config(self) -> Path:
@@ -78,6 +87,29 @@ class Paths:
 @lru_cache(maxsize=1)
 def paths() -> Paths:
     return Paths(root=project_root())
+
+
+def scaffold_workspace(p: Paths) -> dict:
+    """Copy the bundled prompts + config templates into the working dir so they can
+    be edited (prompts are the product; tune them). Skips anything that already
+    exists. No-op in a source checkout, which has no bundled `_assets`. Returns the
+    filenames copied, keyed by kind.
+    """
+    copied: dict = {"prompts": [], "config": []}
+    for kind, dst, pattern in (
+        ("prompts", p.root / "prompts", "*.md"),
+        ("config", p.config, "*.example.toml"),
+    ):
+        src = _ASSETS / kind
+        if not src.exists():
+            continue
+        dst.mkdir(parents=True, exist_ok=True)
+        for f in sorted(src.glob(pattern)):
+            target = dst / f.name
+            if not target.exists():
+                shutil.copy2(f, target)
+                copied[kind].append(f.name)
+    return copied
 
 
 def _load_toml(path: Path) -> dict:
