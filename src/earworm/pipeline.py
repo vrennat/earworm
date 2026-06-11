@@ -207,7 +207,8 @@ STAGES: list[Stage] = [
     Stage(
         name="review",
         prompt_file="review.md",
-        allowed_tools=_RW,
+        # Web tools so the skeptic can spot-check claims against their sources.
+        allowed_tools=("WebSearch", "WebFetch", "Read", "Write", "Edit"),
         build_vars=lambda c: {
             "report_path": str(c.report_path),
             "review_path": str(c.review_path),
@@ -215,6 +216,7 @@ STAGES: list[Stage] = [
         expect_file=lambda c: c.review_path,
         skip_if_exists=True,
         toggle="review",
+        default_timeout=1200,
     ),
     Stage(
         name="script",
