@@ -11,14 +11,17 @@ import numpy as np
 import soundfile as sf
 
 
-def _master_filter(duration_sec: float, m: dict) -> str:
+def _master_filter(duration_sec: float, sample_rate: int, m: dict) -> str:
     """Build the ffmpeg -af chain from the [mastering] config, in order.
 
-    Chain: compress -> EQ -> loudnorm -> fade-out -> silence pads. The fade-out
-    is applied to the content (its start is derived from the content duration),
-    then a leading pad and a trailing pad bracket it with silence so the episode
-    doesn't slam in or cut off. Leading silence uses `adelay` (ffmpeg's `apad`
-    only ever appends to the end), trailing silence uses `apad`.
+    Chain: compress -> EQ -> loudnorm -> fade-out -> silence pads -> resample.
+    The fade-out is applied to the content (its start is derived from the content
+    duration), then a leading pad and a trailing pad bracket it with silence so
+    the episode doesn't slam in or cut off. Leading silence uses `adelay`
+    (ffmpeg's `apad` only ever appends to the end), trailing silence uses `apad`.
+    The final `aresample` is load-bearing: loudnorm runs internally at 192 kHz,
+    so without it libmp3lame encodes at 48 kHz and the adelay pad produces
+    non-monotonic DTS in the mp3 muxer.
     """
     parts = [m[k] for k in ("compress", "eq", "loudnorm") if m.get(k)]
     fade_out = float(m.get("fade_out_sec", 0) or 0)
@@ -30,6 +33,7 @@ def _master_filter(duration_sec: float, m: dict) -> str:
         parts.append(f"adelay={int(round(pad_start * 1000))}:all=1")
     if pad_end > 0:
         parts.append(f"apad=pad_dur={pad_end}")
+    parts.append(f"aresample={sample_rate}")
     return ",".join(parts)
 
 
@@ -49,7 +53,7 @@ def encode_mp3(
 
     af = ""
     if mastering and mastering.get("enabled"):
-        af = _master_filter(len(samples) / sample_rate, mastering)
+        af = _master_filter(len(samples) / sample_rate, sample_rate, mastering)
 
     with tempfile.TemporaryDirectory() as tmp:
         wav = Path(tmp) / "audio.wav"
