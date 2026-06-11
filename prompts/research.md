@@ -14,4 +14,6 @@ Research approach:
 Output requirements:
 - Enough material for an 8-12 minute briefing — thorough but ruthlessly focused. If a section doesn't change how the listener thinks about the topic, cut it.
 - Structure: H1 title, `> thesis` (one sentence — the single most important thing), `## Key findings` (3-6, each genuinely surprising or important), `## Detail` (the evidence and context behind each finding), `## Open questions` (what's genuinely unresolved), `## Sources` (5-8 best links, primary/authoritative, no SEO bait — format as `- [Descriptive title — Publisher](url)`).
+- Every key finding names its source inline (publisher, year) — a finding with no source doesn't ship.
+- Date the evidence. If a finding rests on material more than a year old, say so explicitly instead of presenting it as current.
 - Write to {{report_path}}. Create parent directories if needed. Do not write a script.
