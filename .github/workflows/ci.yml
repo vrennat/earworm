@@ -1,0 +1,37 @@
+name: ci
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  python:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - name: Standalone tests (no heavy deps)
+        env:
+          PYTHONPATH: src
+        run: |
+          python tests/test_config.py
+          python tests/test_normalize.py
+          python tests/test_pipeline.py
+          python tests/test_idempotency.py
+      - uses: astral-sh/setup-uv@v5
+      - name: Lockfile is current
+        run: uv lock --check
+
+  worker:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: worker
+    steps:
+      - uses: actions/checkout@v4
+      - uses: oven-sh/setup-bun@v2
+      - run: bun install --frozen-lockfile
+      - run: bun run typecheck
