@@ -23,7 +23,7 @@ export interface Episode {
   transcript_url?: string | null;
 }
 
-const xmlEscape = (s: string): string =>
+export const xmlEscape = (s: string): string =>
   s
     .replace(/&/g, "&amp;")
     .replace(/</g, "&lt;")

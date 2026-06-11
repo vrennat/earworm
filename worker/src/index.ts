@@ -3,7 +3,7 @@
 //   POST /episodes          -> register/update an episode (Bearer INGEST_SECRET)
 // Audio is served directly from a public R2 bucket; the Worker never proxies it.
 
-import { buildFeed, type Episode, type Show } from "./rss";
+import { buildFeed, xmlEscape, type Episode, type Show } from "./rss";
 
 interface Env {
   DB: D1Database;
@@ -133,7 +133,8 @@ export default {
 
     // Root: a reachable landing page so the channel <link> resolves (200), no info leak.
     if (req.method === "GET" && path === "/") {
-      return new Response(`<!doctype html><title>${env.SHOW_TITLE}</title><h1>${env.SHOW_TITLE}</h1>`, {
+      const title = xmlEscape(env.SHOW_TITLE);
+      return new Response(`<!doctype html><title>${title}</title><h1>${title}</h1>`, {
         headers: { "content-type": "text/html; charset=utf-8" },
       });
     }
