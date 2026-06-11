@@ -70,8 +70,7 @@ def _cmd_run(args: argparse.Namespace) -> int:
     if args.all:
         db.init()
         drained = failed = 0
-        while db.next_pending() is not None:
-            row = db.next_pending()
+        while (row := db.next_pending()) is not None:
             try:
                 runner.run_one(model=args.model)
                 drained += 1
@@ -80,7 +79,7 @@ def _cmd_run(args: argparse.Namespace) -> int:
                 failed += 1
                 print(f"failed #{row['id']}: {type(exc).__name__}: {exc}", file=sys.stderr)
         print(f"drained {drained}, failed {failed}")
-        return 1 if failed and not drained else 0
+        return 1 if failed else 0
 
     try:
         result = runner.run_one(topic_id=args.id, model=args.model)
