@@ -47,16 +47,17 @@ model   = "haiku"            # the `earworm autogen` topic proposer
 engine = "kokoro"            # local neural TTS, the only engine in v1
 
 [voice.kokoro]
-voice = "af_sky"             # narrator; 54 voices available (see README)
+voice = "af_heart"           # narrator; 54 voices available (see README)
 speed = 1.05
 lang_code = "a"              # 'a' American, 'b' British — MUST match the voice
-# blend = [["af_sky", 0.7], ["af_bella", 0.3]]   # optional weighted voice blend
+# blend = [["af_heart", 0.7], ["af_sky", 0.3]]   # optional weighted voice blend
 
 [voice.audio]
 bitrate = "128k"
 sample_rate = 24000
 gap_ms = 900
 section_gap_ms = 1200
+chunk_gap_ms = 120           # short beat when Kokoro re-chunks one long paragraph internally
 
 [voice.mastering]
 enabled = true

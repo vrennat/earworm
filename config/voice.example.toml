@@ -2,22 +2,22 @@
 engine = "kokoro"          # local neural TTS, the only engine in v1
 
 [kokoro]
-voice = "af_sky"           # default narrator; see README for the full 54-voice list
+voice = "af_heart"         # default narrator (Kokoro's top-graded voice); see README for all 54
 speed = 1.05               # a touch quick — keeps energy up, avoids slow/dramatic pacing
 lang_code = "a"            # 'a' = American English, 'b' = British English (MUST match the voice)
 # trf stays off: the transformer G2P is a 436MB download with no measured
 # homograph benefit over the default. Fix specific words via the lexicon instead.
 
-# Optional warmth blend — overrides `voice` when set. Weights are normalized and
-# built as a weighted sum of the voice tensors at render time. Comment out to use
-# the single `voice` above.
-blend = [["af_sky", 0.7], ["af_bella", 0.3]]
+# Optional warmth/brightness blend — overrides `voice` when set. Weights are
+# normalized and built as a weighted sum of the voice tensors at render time.
+# blend = [["af_heart", 0.7], ["af_sky", 0.3]]
 
 [audio]
 bitrate = "128k"           # mp3 bitrate; voice is fine at 96-128k
 sample_rate = 24000        # Kokoro native rate
 gap_ms = 900               # silence between paragraphs — breathing room without slowing speech
 section_gap_ms = 1200      # longer beat at a `---` line (major topic transition / pre-sign-off)
+chunk_gap_ms = 120         # short beat when Kokoro re-chunks one long paragraph internally
 
 # Broadcast-style mastering applied after Kokoro, before mp3 encode.
 # Stages run in order (compress -> EQ -> loudnorm -> fade-out -> silence pads).

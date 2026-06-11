@@ -13,6 +13,8 @@ import numpy as np
 
 # A line that is only --- or *** (3+ chars) marks a major topic transition.
 _SECTION_BREAK = re.compile(r"\n[ \t]*[-*]{3,}[ \t]*(?:\n|$)")
+# Blank-line (or any newline) runs split a section into paragraphs.
+_PARA_BREAK = re.compile(r"\n+")
 
 from ..lexicon import apply_overrides
 from ..normalize import normalize_for_speech
@@ -25,14 +27,15 @@ class KokoroEngine:
     def __init__(self, voice_config: dict) -> None:
         k = voice_config.get("kokoro", {})
         a = voice_config.get("audio", {})
-        self.voice = k.get("voice", "af_bella")
-        self.speed = float(k.get("speed", 0.97))
+        self.voice = k.get("voice", "af_heart")
+        self.speed = float(k.get("speed", 1.05))
         self.lang_code = k.get("lang_code", "a")
         self.blend = k.get("blend")  # optional [[name, weight], ...]
         self.sample_rate = int(a.get("sample_rate", 24000))
         self.bitrate = a.get("bitrate", "128k")
-        self.gap_ms = int(a.get("gap_ms", 250))
-        self.section_gap_ms = int(a.get("section_gap_ms", self.gap_ms))
+        self.gap_ms = int(a.get("gap_ms", 900))
+        self.section_gap_ms = int(a.get("section_gap_ms", 1200))
+        self.chunk_gap_ms = int(a.get("chunk_gap_ms", 120))
         self.mastering = voice_config.get("mastering")
         self._pipeline = None
         self._resolved_voice = None
@@ -73,30 +76,39 @@ class KokoroEngine:
         voice = self._voice()
         prepared = apply_overrides(normalize_for_speech(text))
 
-        # Split on `---`/`***` lines into sections. Paragraphs within a section
-        # get the standard gap between them; section boundaries get a longer beat.
+        # Split on `---`/`***` lines into sections, then split sections into
+        # paragraphs and synthesize per paragraph. Kokoro re-chunks any paragraph
+        # over ~510 phonemes at punctuation boundaries; those intra-paragraph
+        # chunk boundaries get the short chunk gap, not the paragraph gap, so a
+        # long paragraph never acquires an unnatural mid-paragraph pause.
         sections = [s for s in _SECTION_BREAK.split(prepared) if s.strip()]
-        gap = silence(self.gap_ms / 1000.0, self.sample_rate)
-        gap_sec = self.gap_ms / 1000.0
-        section_gap = silence(self.section_gap_ms / 1000.0, self.sample_rate)
-        section_gap_sec = self.section_gap_ms / 1000.0
 
         parts: list[np.ndarray] = []
         segments: list[tuple[str, float, float]] = []
         cursor = 0.0
+
+        def add_gap(ms: int) -> None:
+            nonlocal cursor
+            parts.append(silence(ms / 1000.0, self.sample_rate))
+            cursor += ms / 1000.0
+
         for section in sections:
-            first_in_section = True
-            for graphemes, _phonemes, audio in pipeline(section, voice=voice, speed=self.speed):
-                if parts:
-                    g, g_sec = (section_gap, section_gap_sec) if first_in_section else (gap, gap_sec)
-                    parts.append(g)
-                    cursor += g_sec
-                first_in_section = False
-                a = np.asarray(audio, dtype=np.float32)
-                start = cursor
-                parts.append(a)
-                cursor += len(a) / self.sample_rate
-                segments.append((graphemes, start, cursor))
+            first_para_in_section = True
+            for para in (p for p in _PARA_BREAK.split(section) if p.strip()):
+                first_chunk_in_para = True
+                for graphemes, _phonemes, audio in pipeline(para, voice=voice, speed=self.speed):
+                    if parts:
+                        if first_chunk_in_para:
+                            add_gap(self.section_gap_ms if first_para_in_section else self.gap_ms)
+                        else:
+                            add_gap(self.chunk_gap_ms)
+                    first_chunk_in_para = False
+                    a = np.asarray(audio, dtype=np.float32)
+                    start = cursor
+                    parts.append(a)
+                    cursor += len(a) / self.sample_rate
+                    segments.append((graphemes, start, cursor))
+                first_para_in_section = False
         if not parts:
             raise RuntimeError("Kokoro produced no audio (empty script?)")
         return np.concatenate(parts), segments

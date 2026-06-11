@@ -151,8 +151,9 @@ the pipeline reads these as separate files — copy each `*.example.toml` to its
 
 **Voices.** 54 Kokoro voices download on first use. Set `voice` (and a matching
 `lang_code`: `a` American, `b` British) in `config/voice.toml`, or set a weighted `blend`.
-Naming is `<lang><gender>_<name>` — e.g. `af_sky` (American female), `am_michael`
-(American male), `bf_emma` (British female). Audition them with
+Naming is `<lang><gender>_<name>` — e.g. `af_heart` (American female, the default
+and Kokoro's top-graded voice), `am_michael` (American male), `bf_emma` (British
+female). Audition them with
 `uv run python scripts/voice_sampler.py`.
 
 **Pronunciation.** Kokoro mispronounces some proper nouns and acronyms. `config/lexicon.toml`
