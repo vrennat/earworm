@@ -113,7 +113,8 @@ five passes and the executor (per-stage model, retry, fallback); `runner.py` orc
 Authenticate with `claude login` or `ANTHROPIC_API_KEY`.
 
 **Narration (TTS)** is [Kokoro](https://github.com/hexgrad/kokoro) — a local neural voice
-model. 54 voices, runs on-device, no API key, free. Selected by `engine` in
+model (Apache-2.0, weights included). 54 voices, runs on-device, no API key, free.
+Selected by `engine` in
 `config/voice.toml`; the engine is loaded behind a small interface
 (`src/earworm/tts/base.py`) so another backend can be dropped in later.
 
@@ -281,4 +282,7 @@ Dockerfile      CPU-only renderer image (Kokoro + ffmpeg, pre-warmed model)
 
 ## License
 
-MIT — see [LICENSE](LICENSE).
+MIT — see [LICENSE](LICENSE). The Kokoro model and weights are Apache-2.0
+(hexgrad/Kokoro-82M).
+
+Issues and PRs welcome.
