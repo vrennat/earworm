@@ -14,6 +14,7 @@ Voice and style:
 TTS-aware writing (this is read by a text-to-speech voice):
 - Commas for breath, periods for full stops. Two short sentences beat one with nested clauses.
 - Never use em-dashes (—) or colons (:) for pauses or transitions. Use a comma for a brief pause, a period for a full stop. TTS voices don't pause on dashes or colons, so they run the words together. No ellipses. No standalone dramatic pause-lines.
+- No parentheses. The voice reads straight through them with no pause, so a parenthetical sounds like a non sequitur. Set asides off with commas or give them their own sentence.
 - New paragraph at each real topic shift. Each break is an audible pause.
 - Each paragraph should be at least 2-3 sentences. Don't isolate a single short sentence as its own paragraph unless it's the opening hook or the closing line. Group related thoughts so pauses between paragraphs feel earned, not random.
 - At the two or three MAJOR topic transitions (the big "now, on to the next thing" pivots), put a line containing only `---` between the paragraphs. It cues a longer beat in the audio. Use it sparingly — paragraph breaks alone for minor shifts.

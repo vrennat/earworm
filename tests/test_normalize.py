@@ -51,8 +51,11 @@ def main() -> int:
     check("Talk to Qorvlen Draxhal [KOR-ven DRAKS-hahl] today.",
           "Talk to kor-ven draks-hahl today.")
     check("A stray [aside] survives.", "A stray aside survives.")
+    # parentheticals -> comma asides (Kokoro gives parens no pause)
+    check("The model (released last year) won.", "The model, released last year, won.")
+    check("It ended badly (for them).", "It ended badly, for them.")
     # idempotent (a second pass over already-normalized text is a no-op)
-    sample = "API and SQL and D1 and APIs and Zylonth [zy-LONTH]"
+    sample = "API and SQL and D1 and APIs and Zylonth [zy-LONTH] (an aside)"
     assert n(n(sample)) == n(sample), "normalize is not idempotent"
 
     print("all normalize tests passed")

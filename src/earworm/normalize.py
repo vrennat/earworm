@@ -42,6 +42,12 @@ _DIGITS = {
 _DASH = re.compile(r"[ \t]*[—–][ \t]*")
 _SENT_COLON = re.compile(r"(?<=[A-Za-z])[ \t]*:[ \t]*")
 
+# Parentheticals: Kokoro gives ( ) no pause, so the aside runs into the host
+# sentence. Convert to a comma-delimited aside; a comma left directly before
+# closing punctuation is then collapsed (", ." -> ".").
+_PAREN = re.compile(r"[ \t]*\(([^()\n]+)\)")
+_COMMA_PUNCT = re.compile(r",\s*([.,;!?])")
+
 _COORD = re.compile(r"(-?)(\d+)\.(\d+)\s*°\s*([NSEW])\b")
 _DEG_C = re.compile(r"°\s?C\b")
 _DEG_F = re.compile(r"°\s?F\b")
@@ -170,6 +176,8 @@ def normalize_for_speech(text: str) -> str:
     text = _apply_phonetic_hints(text)     # 0. "Name [hint]" -> spoken hint (+ cache reuse)
     text = _DASH.sub(", ", text)           #    em/en dash -> comma pause
     text = _SENT_COLON.sub(". ", text)     #    sentence colon -> full stop (3:00 kept)
+    text = _PAREN.sub(lambda m: f", {m.group(1).strip()},", text)  # (aside) -> , aside,
+    text = _COMMA_PUNCT.sub(r"\1", text)   #    ", ." left by the paren pass -> "."
     text = _COORD.sub(_coord, text)        # 1. coordinates (before bare degree/minus)
     text = _DEG_C.sub(" degrees Celsius", text)
     text = _DEG_F.sub(" degrees Fahrenheit", text)
