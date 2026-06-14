@@ -106,10 +106,24 @@ def build_report(title: str, source_ref: Optional[str], summary: str) -> str:
     return "\n".join(lines)
 
 
-def build_script(title: str, date: str, report_path: str, body: str) -> str:
+def build_script(
+    title: str, date: str, report_path: str, body: str, author: Optional[str] = None
+) -> str:
     """The inbox script: front-matter the renderer reads (title/date/report_path)
-    followed by the spoken body."""
-    return f"---\ntitle: {title}\ndate: {date}\nreport_path: {report_path}\n---\n\n{body.strip()}\n"
+    followed by the spoken body. An optional `author` is recorded in front-matter."""
+    fm = [f"title: {title}", f"date: {date}", f"report_path: {report_path}"]
+    if author:
+        fm.append(f"author: {author}")
+    return "---\n" + "\n".join(fm) + "\n---\n\n" + body.strip() + "\n"
+
+
+def prepend_byline(body: str, title: str, author: str) -> str:
+    """Open the spoken body with an attribution sentence. A leading line that is
+    just the title is dropped first, so the title isn't read twice."""
+    lines = body.lstrip().split("\n")
+    if lines and lines[0].strip() == title.strip():
+        body = "\n".join(lines[1:]).lstrip()
+    return f"This is {title}, an essay by {author}.\n\n{body}"
 
 
 def adapted_too_short(src_words: int, out_words: int, threshold: float = 0.6) -> bool:
@@ -165,10 +179,18 @@ def _claude_fetch(url: str, out_path: Path, model: Optional[str]) -> str:
     return out_path.read_text()
 
 
-def _claude_adapt(source_path: Path, out_path: Path, model: Optional[str]) -> str:
+def _claude_adapt(
+    source_path: Path, out_path: Path, model: Optional[str], author: Optional[str] = None
+) -> str:
     """Rewrite the source text for the ear (light cleanup, full content) into out_path."""
+    author_note = (
+        f"The author is {author}. Credit them by name in that opening sentence." if author else ""
+    )
     prompt = claude.render_prompt(
-        paths().prompts / "ingest.md", source_path=str(source_path), out_path=str(out_path)
+        paths().prompts / "ingest.md",
+        source_path=str(source_path),
+        out_path=str(out_path),
+        author_note=author_note,
     )
     _run_with_retry(
         "ingest", prompt, out_path, model,
@@ -187,6 +209,7 @@ def ingest_source(
     raw: bool = False,
     model: Optional[str] = None,
     source_url: Optional[str] = None,
+    author: Optional[str] = None,
     p: Optional[Paths] = None,
     _fetch: Optional[Callable[..., str]] = None,
     _adapt: Optional[Callable[..., str]] = None,
@@ -198,7 +221,8 @@ def ingest_source(
     is used as-is (markdown stripped to prose); otherwise it goes through the Claude
     audio-adaptation pass. URLs are always fetched + extracted by Claude. `source_url`
     overrides the show-note source link — use it to read text from a file/stdin while
-    citing the original web URL. Returns a result dict (run_id, paths, word counts,
+    citing the original web URL. `author`, when given, is recorded in front-matter and
+    opens the episode with a spoken attribution. Returns a result dict (run_id, paths,
     and a `warning` if the adapt pass looks like it condensed the essay).
     """
     p = p or paths()
@@ -248,8 +272,13 @@ def ingest_source(
         body = markdown_to_prose(body_src)
         adapted = False
     else:
-        body = adapt(source_path, run_dir / "script.body.txt", model)
+        body = adapt(source_path, run_dir / "script.body.txt", model, author)
         adapted = True
+
+    # Raw text gets no spoken intro; add an attribution opener when an author is
+    # named. The adapt pass writes its own credited opener (via author_note).
+    if author and raw:
+        body = prepend_byline(body, resolved_title, author)
 
     src_words, body_words = _wc(body_src), _wc(body)
     warning = ""
@@ -266,7 +295,7 @@ def ingest_source(
     # Generate in the run dir, then atomically rename into inbox so `earworm watch`
     # never sees a half-written file (same pattern as runner.run_one).
     staged = run_dir / "script.md"
-    staged.write_text(build_script(resolved_title, run_date, str(report_path), body))
+    staged.write_text(build_script(resolved_title, run_date, str(report_path), body, author))
     dest = p.inbox_scripts / f"{run_id}.md"
     os.replace(staged, dest)
 

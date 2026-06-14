@@ -20,6 +20,6 @@ TTS-aware writing (the voice reads exactly the characters you write):
 - On first mention of any non-English name, uncommon surname, or non-obvious pronunciation, add a phonetic hint in square brackets: "Dario Amodei [ah-mo-DAY]". Use simple phonetic spelling. Common English names (John, David, Sam) don't need one.
 - New paragraph at each real topic shift; each break is an audible pause. At the two or three MAJOR section pivots, put a line containing only `---` between paragraphs to cue a longer beat. Use it sparingly. Paragraph breaks alone handle minor shifts.
 
-You may, lightly: if the essay opens cold, add a single short spoken sentence at the top naming what this is, for example the title and that it is an essay by its author. One sentence. Do NOT add a summary, an outro, opinions, or commentary of your own anywhere else. You are reading the author's work, not hosting a show about it.
+You may, lightly: if the essay opens cold, add a single short spoken sentence at the top naming what this is, for example the title and that it is an essay by its author. {{author_note}} One sentence. Do NOT add a summary, an outro, opinions, or commentary of your own anywhere else. You are reading the author's work, not hosting a show about it.
 
 Write the finished spoken script — body only, no front matter — to {{out_path}}. Create parent directories if needed.

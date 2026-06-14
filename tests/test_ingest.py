@@ -99,6 +99,39 @@ def test_build_script_has_frontmatter_and_body() -> None:
     assert body.startswith("The spoken body.")
 
 
+def test_build_script_includes_author() -> None:
+    s = build_script(
+        title="T", date="2026-06-14", report_path="/x/report.md", body="Body.", author="Dario Amodei"
+    )
+    meta, _ = parse(s)
+    assert meta["author"] == "Dario Amodei"
+
+
+def test_build_script_omits_author_when_absent() -> None:
+    s = build_script(title="T", date="2026-06-14", report_path="/x/report.md", body="Body.")
+    meta, _ = parse(s)
+    assert "author" not in meta
+
+
+def test_raw_author_prepends_byline_and_drops_dup_title() -> None:
+    with tempfile.TemporaryDirectory() as tmp:
+        p = _paths(tmp)
+        res = ingest_source(
+            "-",
+            raw=True,
+            title="The Urgency of Interpretability",
+            author="Dario Amodei",
+            date="2026-06-14",
+            p=p,
+            _stdin=lambda: "The Urgency of Interpretability\n\nIn the decade I have worked in AI.",
+        )
+        meta, body = parse((p.inbox_scripts / f"{res['run_id']}.md").read_text())
+        assert meta["author"] == "Dario Amodei"
+        assert body.startswith("This is The Urgency of Interpretability, an essay by Dario Amodei.")
+        assert body.count("The Urgency of Interpretability") == 1  # title not spoken twice
+        assert body.rstrip().endswith("In the decade I have worked in AI.")
+
+
 def test_build_report_is_shownotes_parseable() -> None:
     report = build_report(
         title="Machines of Loving Grace",
@@ -176,7 +209,7 @@ def test_ingest_file_runs_adapt_pass() -> None:
         src.write_text("---\ntitle: My Essay\n---\nRaw essay prose, lightly written.")
         seen = {}
 
-        def fake_adapt(source_path, out_path, model):
+        def fake_adapt(source_path, out_path, model, author=None):
             seen["source_text"] = Path(source_path).read_text()
             cleaned = "Adapted spoken prose for the ear."
             Path(out_path).write_text(cleaned)
@@ -204,7 +237,7 @@ def test_ingest_url_fetches_then_adapts() -> None:
             Path(out_path).write_text(text)
             return text
 
-        def fake_adapt(source_path, out_path, model):
+        def fake_adapt(source_path, out_path, model, author=None):
             order.append("adapt")
             Path(out_path).write_text("Spoken version.")
             return "Spoken version."
@@ -268,7 +301,7 @@ def test_ingest_warns_when_adapt_overcondenses() -> None:
         src = Path(tmp) / "long.md"
         src.write_text(" ".join(f"word{i}" for i in range(1000)))
 
-        def shrinking_adapt(source_path, out_path, model):
+        def shrinking_adapt(source_path, out_path, model, author=None):
             Path(out_path).write_text("a very short summary")
             return "a very short summary"
 

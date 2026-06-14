@@ -62,6 +62,7 @@ def _cmd_ingest(args: argparse.Namespace) -> int:
             raw=args.raw,
             model=args.model,
             source_url=args.source_url,
+            author=args.author,
         )
     except Exception as exc:  # noqa: BLE001 - report + non-zero exit
         print(f"ingest failed: {type(exc).__name__}: {exc}", file=sys.stderr)
@@ -228,6 +229,11 @@ def build_parser() -> argparse.ArgumentParser:
         "--source-url",
         default=None,
         help="cite this URL in the show notes (when reading text from a file/stdin)",
+    )
+    p_ingest.add_argument(
+        "--author",
+        default=None,
+        help="essay author; recorded in front-matter and spoken as an opening credit",
     )
     p_ingest.set_defaults(func=_cmd_ingest)
 
