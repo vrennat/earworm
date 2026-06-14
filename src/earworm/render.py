@@ -69,19 +69,26 @@ def render_script_file(
     title = meta.get("title") or slug
     date = meta.get("date", "")
     report_path = meta.get("report_path")
+    feed_name = (meta.get("feed") or feed.DEFAULT_FEED).strip() or feed.DEFAULT_FEED
     chash = content_hash(body)
     audio_path = p.episodes / f"{slug}.mp3"
 
     # Idempotent on episode identity (the slug), not the body hash. An identical
-    # re-drop whose audio still exists is skipped. A *changed* re-render of the
-    # same slug falls through and REPLACES the episode in place (reusing the
-    # stable guid -> same R2 key + feed row), so it never produces a duplicate.
+    # re-drop on the same feed whose audio still exists is skipped. A *changed*
+    # re-render — or the same body re-tagged to a different feed — falls through
+    # and REPLACES the episode in place (reusing the stable guid -> same R2 key +
+    # feed row), so it never produces a duplicate.
     existing = db.get_episode_by_slug(slug)
-    if existing and existing["content_hash"] == chash and audio_path.exists():
+    if (
+        existing
+        and existing["content_hash"] == chash
+        and existing["feed"] == feed_name
+        and audio_path.exists()
+    ):
         dest = p.done_scripts / script_path.name
         if script_path.resolve() != dest.resolve():
             shutil.move(str(script_path), str(dest))
-        return {"status": "skipped_duplicate", "slug": slug, "title": title}
+        return {"status": "skipped_duplicate", "slug": slug, "title": title, "feed": feed_name}
 
     if engine is None:
         engine = get_engine(voice_config())
@@ -110,6 +117,7 @@ def render_script_file(
         report_path=report_path,
         duration_sec=duration_sec,
         description=notes,
+        feed=feed_name,
     )
 
     # Move processed script + copy report into done/ for archive. Skip the copy
@@ -125,6 +133,7 @@ def render_script_file(
         "status": "rendered",
         "slug": slug,
         "title": title,
+        "feed": feed_name,
         "audio_path": str(audio_path),
         "duration_sec": round(duration_sec, 1),
         "engine": engine.name,
@@ -146,6 +155,7 @@ def render_script_file(
                     duration_sec=duration_sec,
                     transcript_path=transcript_path,
                     pub_date=ep["created_at"] if ep else None,
+                    feed=feed_name,
                 )
                 db.mark_published(guid, audio_url, transcript_url)
                 result["audio_url"] = audio_url
@@ -183,6 +193,7 @@ def publish_unpublished(log=print) -> int:
                 duration_sec=r["duration_sec"] or 0.0,
                 transcript_path=vtt if vtt.exists() else None,
                 pub_date=r["created_at"],
+                feed=r["feed"] or feed.DEFAULT_FEED,
             )
             db.mark_published(guid, audio_url, transcript_url)
             published += 1

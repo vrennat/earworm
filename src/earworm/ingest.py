@@ -24,6 +24,7 @@ from typing import Callable, Optional
 
 from . import claude, pipeline
 from .config import Paths, paths, pipeline_config
+from .feed import DEFAULT_FEED
 from .frontmatter import parse
 from .runner import slugify
 
@@ -107,11 +108,20 @@ def build_report(title: str, source_ref: Optional[str], summary: str) -> str:
 
 
 def build_script(
-    title: str, date: str, report_path: str, body: str, author: Optional[str] = None
+    title: str,
+    date: str,
+    report_path: str,
+    body: str,
+    author: Optional[str] = None,
+    feed: Optional[str] = None,
 ) -> str:
     """The inbox script: front-matter the renderer reads (title/date/report_path)
-    followed by the spoken body. An optional `author` is recorded in front-matter."""
+    followed by the spoken body. An optional `author` is recorded in front-matter.
+    A named `feed` routes the episode to a separate RSS feed; the default feed is
+    left implicit (no `feed:` line) so ordinary scripts stay unchanged."""
     fm = [f"title: {title}", f"date: {date}", f"report_path: {report_path}"]
+    if feed and feed != DEFAULT_FEED:
+        fm.append(f"feed: {feed}")
     if author:
         fm.append(f"author: {author}")
     return "---\n" + "\n".join(fm) + "\n---\n\n" + body.strip() + "\n"
@@ -210,6 +220,7 @@ def ingest_source(
     model: Optional[str] = None,
     source_url: Optional[str] = None,
     author: Optional[str] = None,
+    feed: Optional[str] = None,
     p: Optional[Paths] = None,
     _fetch: Optional[Callable[..., str]] = None,
     _adapt: Optional[Callable[..., str]] = None,
@@ -222,11 +233,14 @@ def ingest_source(
     audio-adaptation pass. URLs are always fetched + extracted by Claude. `source_url`
     overrides the show-note source link — use it to read text from a file/stdin while
     citing the original web URL. `author`, when given, is recorded in front-matter and
-    opens the episode with a spoken attribution. Returns a result dict (run_id, paths,
-    and a `warning` if the adapt pass looks like it condensed the essay).
+    opens the episode with a spoken attribution. `feed`, when given, routes the episode
+    to a separate named RSS feed (normalized to a URL-safe slug). Returns a result dict
+    (run_id, paths, the resolved feed, and a `warning` if the adapt pass looks like it
+    condensed the essay).
     """
     p = p or paths()
     p.ensure_dirs()
+    feed_slug = slugify(feed) if feed and feed.strip() else DEFAULT_FEED
     fetch = _fetch or _claude_fetch
     adapt = _adapt or _claude_adapt
     read_stdin = _stdin or (lambda: sys.stdin.read())
@@ -295,7 +309,9 @@ def ingest_source(
     # Generate in the run dir, then atomically rename into inbox so `earworm watch`
     # never sees a half-written file (same pattern as runner.run_one).
     staged = run_dir / "script.md"
-    staged.write_text(build_script(resolved_title, run_date, str(report_path), body, author))
+    staged.write_text(
+        build_script(resolved_title, run_date, str(report_path), body, author, feed_slug)
+    )
     dest = p.inbox_scripts / f"{run_id}.md"
     os.replace(staged, dest)
 
@@ -303,6 +319,7 @@ def ingest_source(
         "run_id": run_id,
         "slug": run_id,
         "title": resolved_title,
+        "feed": feed_slug,
         "script_path": str(dest),
         "report_path": str(report_path),
         "source": source_ref or "stdin",

@@ -21,6 +21,7 @@ export interface Episode {
   duration_sec: number;
   pub_date: string; // ISO 8601
   transcript_url?: string | null;
+  feed?: string; // which feed this episode belongs to (filter dimension, not rendered)
 }
 
 export const xmlEscape = (s: string): string =>

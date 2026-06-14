@@ -11,7 +11,9 @@ CREATE TABLE IF NOT EXISTS episodes (
     duration_sec INTEGER NOT NULL,
     pub_date       TEXT NOT NULL,      -- ISO 8601 UTC; converted to RFC 822 in the feed
     created_at     TEXT NOT NULL,
-    transcript_url TEXT                -- optional WebVTT URL (podcast:transcript)
+    transcript_url TEXT,               -- optional WebVTT URL (podcast:transcript)
+    feed           TEXT NOT NULL DEFAULT 'default'  -- which RSS feed this episode belongs to
 );
 
 CREATE INDEX IF NOT EXISTS idx_episodes_pub_date ON episodes (pub_date DESC);
+CREATE INDEX IF NOT EXISTS idx_episodes_feed ON episodes (feed, pub_date DESC);

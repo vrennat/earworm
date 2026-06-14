@@ -40,7 +40,8 @@ CREATE TABLE IF NOT EXISTS episodes (
     description    TEXT,
     audio_url      TEXT,
     published_at   TEXT,
-    transcript_url TEXT
+    transcript_url TEXT,
+    feed           TEXT NOT NULL DEFAULT 'default'  -- which RSS feed this episode belongs to
 );
 """
 
@@ -54,6 +55,9 @@ _EPISODE_MIGRATIONS = {
     # render). It is reused across re-renders so the feed replaces, never
     # duplicates. `content_hash` still tracks the current body for skip-detection.
     "guid": "ALTER TABLE episodes ADD COLUMN guid TEXT",
+    # The RSS feed an episode belongs to. Existing rows backfill to 'default' (the
+    # main feed), so legacy episodes keep their current placement.
+    "feed": "ALTER TABLE episodes ADD COLUMN feed TEXT NOT NULL DEFAULT 'default'",
 }
 
 
@@ -175,12 +179,14 @@ def upsert_episode(
     report_path: Optional[str],
     duration_sec: float,
     description: str = "",
+    feed: str = "default",
 ) -> str:
     """Insert or update the episode keyed on its identity (slug), and return its
     stable guid. A brand-new episode takes its content hash as the guid; a
     re-render of an existing slug REUSES that guid (and keeps the original
     created_at, so the feed pub_date is stable) while refreshing the body hash.
-    published_at is cleared so the freshly rendered audio is (re)published.
+    published_at is cleared so the freshly rendered audio is (re)published. `feed`
+    is the RSS feed the episode belongs to (defaults to the main feed).
     """
     with connect() as conn:
         row = conn.execute(
@@ -190,18 +196,29 @@ def upsert_episode(
             guid = row["guid"] or content_hash
             conn.execute(
                 """UPDATE episodes SET title=?, guid=?, content_hash=?, audio_path=?,
-                       report_path=?, duration_sec=?, description=?, published_at=NULL
+                       report_path=?, duration_sec=?, description=?, feed=?, published_at=NULL
                    WHERE slug=?""",
-                (title, guid, content_hash, audio_path, report_path, duration_sec, description, slug),
+                (title, guid, content_hash, audio_path, report_path, duration_sec, description, feed, slug),
             )
             return guid
         conn.execute(
             """INSERT INTO episodes
-               (slug, title, guid, content_hash, audio_path, report_path, duration_sec, created_at, description)
-               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)""",
-            (slug, title, content_hash, content_hash, audio_path, report_path, duration_sec, now_iso(), description),
+               (slug, title, guid, content_hash, audio_path, report_path, duration_sec, created_at, description, feed)
+               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+            (slug, title, content_hash, content_hash, audio_path, report_path, duration_sec, now_iso(), description, feed),
         )
         return content_hash
+
+
+def set_episode_feed(slug: str, feed: str) -> bool:
+    """Re-tag an episode's feed without re-rendering. Clears published_at so the
+    next publish moves it onto the new feed. Returns True if a row was updated.
+    """
+    with connect() as conn:
+        cur = conn.execute(
+            "UPDATE episodes SET feed=?, published_at=NULL WHERE slug=?", (feed, slug)
+        )
+        return cur.rowcount > 0
 
 
 def get_episode(guid: str) -> Optional[sqlite3.Row]:

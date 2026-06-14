@@ -63,13 +63,14 @@ def _cmd_ingest(args: argparse.Namespace) -> int:
             model=args.model,
             source_url=args.source_url,
             author=args.author,
+            feed=args.feed,
         )
     except Exception as exc:  # noqa: BLE001 - report + non-zero exit
         print(f"ingest failed: {type(exc).__name__}: {exc}", file=sys.stderr)
         return 1
 
     mode = "raw" if not res["adapted"] else "adapted"
-    print(f"ingested [{mode}]: {res['title']}")
+    print(f"ingested [{mode}]: {res['title']}  (feed: {res['feed']})")
     print(f"  source: {res['source']}")
     print(f"  script: {res['script_path']}  ({res['body_words']} words)")
     if res["warning"]:
@@ -234,6 +235,12 @@ def build_parser() -> argparse.ArgumentParser:
         "--author",
         default=None,
         help="essay author; recorded in front-matter and spoken as an opening credit",
+    )
+    p_ingest.add_argument(
+        "--feed",
+        default=None,
+        help="route this episode to a named RSS feed (e.g. 'dario-amodei'); "
+        "default is the main feed",
     )
     p_ingest.set_defaults(func=_cmd_ingest)
 

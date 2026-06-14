@@ -84,6 +84,7 @@ earworm ingest essay.md                          # a local markdown/text file
 earworm ingest https://example.com/some-essay    # fetch + extract the article (Claude)
 pbpaste | earworm ingest -                        # stdin
 earworm ingest essay.md --title "My Title" --date 2026-06-14
+earworm ingest essay.md --author "Dario Amodei" --feed dario-amodei  # route to a separate feed
 ```
 
 By default a light Claude pass adapts the text **for the ear**: it strips reading-only
@@ -93,6 +94,10 @@ author's argument. Pass `--raw` to skip that pass and read the text verbatim (ma
 is still stripped deterministically). If the adapt pass looks like it condensed a long
 essay, `ingest` warns you and suggests `--raw`. The model/retry knobs reuse
 `[pipeline.ingest]` and `[pipeline.ingest_fetch]` in `config/pipeline.toml`.
+
+`--feed <name>` routes the episode to a separate named RSS feed instead of the main one
+(see [Multiple feeds](#multiple-feeds) below) — handy for curated content like a guest
+author's essays that you want to subscribe to and share on its own.
 
 ## Architecture
 
@@ -236,6 +241,36 @@ The Worker serves a token-gated `/<FEED_TOKEN>/feed.xml` (valid podcast RSS 2.0 
 iTunes namespace) — also reachable as `/feed.xml?token=…` for finicky apps. Audio is served
 directly from the public R2 bucket under an unguessable per-episode key; the Worker never
 proxies bytes. A bad token returns 404 (not 401), so the feed's existence never leaks.
+
+### Multiple feeds
+
+One deployment can serve several feeds from the same database, so curated content can live
+on its own feed you subscribe to and share independently of the main briefing. Every
+episode carries a `feed` tag (default `default`); set it with `feed: <name>` in a script's
+front-matter, or `earworm ingest … --feed <name>` (the name is slugified to be URL-safe).
+Auto-generated briefings need no tag — they ride the default feed.
+
+Each feed has its own URL, gated by the same token:
+
+```
+/<FEED_TOKEN>/feed.xml                 # the main feed
+/<FEED_TOKEN>/dario-amodei/feed.xml    # a named feed   (also /feed.xml?token=…&feed=dario-amodei)
+```
+
+Two Worker `vars` (in `wrangler.jsonc`) tune the behavior:
+
+- **`MAIN_FEED_INCLUDES_ALL`** — `"false"` (default) keeps the main feed to default-feed
+  episodes only, so named feeds stay separate; `"true"` makes it aggregate every episode.
+- **`FEED_META`** — an optional JSON string mapping a feed slug to channel-metadata
+  overrides (`title`, `author`, `description`, `image`, `link`, …). A feed with no entry
+  inherits the show metadata, so e.g. the `dario-amodei` feed can carry its own title and
+  author instead of the show's.
+
+Deploying multi-feed onto an existing feed needs the one-time column migration
+`bunx wrangler d1 execute <db> --remote --file migrations/0001_add_feed.sql` before
+`bunx wrangler deploy`; fresh deploys get the column from `schema.sql`. Re-tag an
+already-published episode by editing its `feed:` front-matter (or the local ledger) and
+running `earworm publish` — no re-render needed; the episode moves to its new feed in place.
 
 ## Scheduling (macOS)
 

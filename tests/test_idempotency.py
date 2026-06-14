@@ -61,6 +61,39 @@ def test_rerender_same_slug_reuses_guid_and_replaces(tmp: str) -> None:
     assert rows[0]["published_at"] is None, "changed audio must be re-published"
 
 
+def test_upsert_episode_stores_feed(tmp: str) -> None:
+    db = _fresh_db(tmp)
+    db.upsert_episode(
+        slug="ep", title="T", content_hash="h1", audio_path="/x",
+        report_path=None, duration_sec=1.0, feed="dario-amodei",
+    )
+    assert db.get_episode_by_slug("ep")["feed"] == "dario-amodei"
+
+
+def test_upsert_episode_defaults_feed(tmp: str) -> None:
+    db = _fresh_db(tmp)
+    db.upsert_episode(
+        slug="ep", title="T", content_hash="h1", audio_path="/x",
+        report_path=None, duration_sec=1.0,
+    )
+    assert db.get_episode_by_slug("ep")["feed"] == "default"
+
+
+def test_set_episode_feed_retags_and_unpublishes(tmp: str) -> None:
+    # Re-tagging an episode's feed is metadata-only: it must clear published_at so
+    # the next publish moves the episode onto its new feed (no re-render needed).
+    db = _fresh_db(tmp)
+    guid = db.upsert_episode(
+        slug="ep", title="T", content_hash="h1", audio_path="/x",
+        report_path=None, duration_sec=1.0,
+    )
+    db.mark_published(guid, "https://r2/x.mp3", None)
+    db.set_episode_feed("ep", "dario-amodei")
+    row = db.get_episode_by_slug("ep")
+    assert row["feed"] == "dario-amodei"
+    assert row["published_at"] is None
+
+
 def test_distinct_slugs_get_distinct_rows(tmp: str) -> None:
     db = _fresh_db(tmp)
     db.upsert_episode(slug="a", title="A", content_hash="h1", audio_path="/a", report_path=None, duration_sec=1.0)

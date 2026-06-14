@@ -113,6 +113,29 @@ def test_build_script_omits_author_when_absent() -> None:
     assert "author" not in meta
 
 
+def test_build_script_includes_named_feed() -> None:
+    s = build_script(
+        title="T", date="2026-06-14", report_path="/x/report.md", body="Body.", feed="dario-amodei"
+    )
+    meta, _ = parse(s)
+    assert meta["feed"] == "dario-amodei"
+
+
+def test_build_script_omits_feed_for_default() -> None:
+    # The default feed is implicit; the renderer assumes it when no `feed:` is present.
+    s = build_script(
+        title="T", date="2026-06-14", report_path="/x/report.md", body="Body.", feed="default"
+    )
+    meta, _ = parse(s)
+    assert "feed" not in meta
+
+
+def test_build_script_omits_feed_when_absent() -> None:
+    s = build_script(title="T", date="2026-06-14", report_path="/x/report.md", body="Body.")
+    meta, _ = parse(s)
+    assert "feed" not in meta
+
+
 def test_raw_author_prepends_byline_and_drops_dup_title() -> None:
     with tempfile.TemporaryDirectory() as tmp:
         p = _paths(tmp)
@@ -293,6 +316,30 @@ def test_ingest_source_url_override_sets_shownote_source() -> None:
         _, sources = shownotes.extract(p.runs / res["run_id"] / "report.md")
         assert any("darioamodei.com/essay/x" in s for s in sources)
         assert res["source"] == "https://darioamodei.com/essay/x"
+
+
+def test_ingest_feed_slugified_into_frontmatter() -> None:
+    # `--feed "Dario Amodei"` is normalized to a URL-safe slug and recorded.
+    with tempfile.TemporaryDirectory() as tmp:
+        p = _paths(tmp)
+        res = ingest_source(
+            "-", raw=True, title="Cited", date="2026-06-14", feed="Dario Amodei",
+            p=p, _stdin=lambda: "Body text.",
+        )
+        meta, _ = parse((p.inbox_scripts / f"{res['run_id']}.md").read_text())
+        assert meta["feed"] == "dario-amodei"
+        assert res["feed"] == "dario-amodei"
+
+
+def test_ingest_defaults_feed_when_absent() -> None:
+    with tempfile.TemporaryDirectory() as tmp:
+        p = _paths(tmp)
+        res = ingest_source(
+            "-", raw=True, title="X", date="2026-06-14", p=p, _stdin=lambda: "Body."
+        )
+        meta, _ = parse((p.inbox_scripts / f"{res['run_id']}.md").read_text())
+        assert "feed" not in meta, "the default feed stays implicit in frontmatter"
+        assert res["feed"] == "default"
 
 
 def test_ingest_warns_when_adapt_overcondenses() -> None:

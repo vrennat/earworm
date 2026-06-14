@@ -17,7 +17,20 @@
     "SHOW_IMAGE": "https://pub-xxxxxxxxxxxx.r2.dev/cover.png",
     "SHOW_LANGUAGE": "en-us",
     "SHOW_CATEGORY": "Technology",
-    "SHOW_LINK": "https://earworm-feed.your-subdomain.workers.dev"
+    "SHOW_LINK": "https://earworm-feed.your-subdomain.workers.dev",
+
+    // Multi-feed support. Each episode carries a `feed` tag (default "default").
+    // The main feed lives at /:token/feed.xml; a named feed at /:token/<feed>/feed.xml.
+
+    // "true" makes the main feed aggregate every episode across all feeds; "false"
+    // (default) keeps it to the default-feed episodes only, so named feeds stay separate.
+    "MAIN_FEED_INCLUDES_ALL": "false",
+
+    // Optional per-feed channel metadata, as a JSON STRING mapping feed slug -> the
+    // Show fields to override (title/author/description/email/image/language/category/link).
+    // A feed with no entry inherits the SHOW_* values above. Example:
+    //   "FEED_META": "{\"dario-amodei\":{\"title\":\"Dario Amodei — Essays\",\"author\":\"Dario Amodei\",\"description\":\"Essays by Dario Amodei, read aloud.\"}}"
+    "FEED_META": "{}"
   },
   "d1_databases": [
     {

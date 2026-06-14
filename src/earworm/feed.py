@@ -22,6 +22,10 @@ from typing import Optional
 
 from .config import feed_config, paths, secrets
 
+# The implicit feed an episode lands on when no `feed:` front-matter is set. The
+# Worker uses the same name; auto-generated briefings ride this feed.
+DEFAULT_FEED = "default"
+
 
 class PublishError(RuntimeError):
     pass
@@ -123,6 +127,7 @@ def publish(
     duration_sec: float,
     transcript_path: Optional[Path] = None,
     pub_date: Optional[str] = None,
+    feed: str = DEFAULT_FEED,
 ) -> tuple[str, Optional[str]]:
     """Upload audio (+ transcript) and register the episode. Returns (audio_url, transcript_url).
 
@@ -152,6 +157,7 @@ def publish(
             "duration_sec": int(round(duration_sec)),
             "transcript_url": transcript_url,
             "pub_date": pub_date,  # Worker defaults to now() if null
+            "feed": feed or DEFAULT_FEED,
         }
     )
     return audio_url, transcript_url
