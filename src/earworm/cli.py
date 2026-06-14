@@ -3,6 +3,7 @@
 Commands:
   earworm init                 create data dirs + db
   earworm add "<topic>"        queue a topic (--source manual|auto)
+  earworm ingest <src>         stage a pre-written script (file|URL|-) for rendering
   earworm list                 show the queue
   earworm run [--id N]         drain one pending topic (research -> script)
   earworm reset-stale          requeue topics stuck 'running' after a crash
@@ -47,6 +48,31 @@ def _cmd_add(args: argparse.Namespace) -> int:
         return 2
     tid = db.add_topic(topic, source=args.source)
     print(f"queued #{tid} [{args.source}]: {topic}")
+    return 0
+
+
+def _cmd_ingest(args: argparse.Namespace) -> int:
+    from . import ingest
+
+    try:
+        res = ingest.ingest_source(
+            args.source,
+            title=args.title,
+            date=args.date,
+            raw=args.raw,
+            model=args.model,
+        )
+    except Exception as exc:  # noqa: BLE001 - report + non-zero exit
+        print(f"ingest failed: {type(exc).__name__}: {exc}", file=sys.stderr)
+        return 1
+
+    mode = "raw" if not res["adapted"] else "adapted"
+    print(f"ingested [{mode}]: {res['title']}")
+    print(f"  source: {res['source']}")
+    print(f"  script: {res['script_path']}  ({res['body_words']} words)")
+    if res["warning"]:
+        print(f"  warning: {res['warning']}", file=sys.stderr)
+    print("  -> run `earworm watch` (or wait for the watch agent) to render it")
     return 0
 
 
@@ -175,6 +201,29 @@ def build_parser() -> argparse.ArgumentParser:
     p_add.add_argument("topic", help="topic or pointed question")
     p_add.add_argument("--source", choices=["manual", "auto"], default="manual")
     p_add.set_defaults(func=_cmd_add)
+
+    p_ingest = sub.add_parser(
+        "ingest", help="stage a pre-written script (file, URL, or stdin) for rendering"
+    )
+    p_ingest.add_argument(
+        "source",
+        nargs="?",
+        default="-",
+        help="path to a .md/.txt file, an http(s) URL, or - for stdin (default)",
+    )
+    p_ingest.add_argument("--title", default=None, help="override the episode title")
+    p_ingest.add_argument(
+        "--date", default=None, help="episode date YYYY-MM-DD (default: today)"
+    )
+    p_ingest.add_argument(
+        "--raw",
+        action="store_true",
+        help="skip the Claude audio-adaptation pass; use the text as-is",
+    )
+    p_ingest.add_argument(
+        "--model", default=None, help="override Claude model for the adapt/fetch passes"
+    )
+    p_ingest.set_defaults(func=_cmd_ingest)
 
     p_list = sub.add_parser("list", help="show the queue")
     p_list.add_argument("--limit", type=int, default=50)

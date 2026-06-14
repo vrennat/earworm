@@ -58,6 +58,7 @@ customize it in `config/voice.toml`.
 ```sh
 earworm add "<topic>"        queue a topic
 earworm autogen --count 3    propose + queue topics from interests.md
+earworm ingest <src>         stage a pre-written script (file, URL, or stdin) to render
 earworm list                 inspect the queue
 earworm run [--id N] [--all] drain pending topic(s): research -> review -> script
 earworm reset-stale          requeue topics stuck 'running' after a crash
@@ -70,6 +71,28 @@ earworm publish              retry upload + register for any unpublished episode
 `run` accepts `--model` to force one model across every stage (e.g. `--model sonnet`).
 For finer control — a different model per pass, retries, fallback, or skipping a
 quality pass — use `config/pipeline.toml` (see [Pipeline configuration](#pipeline-configuration)).
+
+### Ingesting pre-written scripts
+
+When the text already exists — an essay, a blog post, a talk transcript — you don't
+need the research and script-generation passes. `earworm ingest` is a second intake
+path: it takes ready prose and stages it straight into `inbox/scripts/`, where the same
+`earworm watch` renderer turns it into an episode. It never touches the topics queue.
+
+```sh
+earworm ingest essay.md                          # a local markdown/text file
+earworm ingest https://example.com/some-essay    # fetch + extract the article (Claude)
+pbpaste | earworm ingest -                        # stdin
+earworm ingest essay.md --title "My Title" --date 2026-06-14
+```
+
+By default a light Claude pass adapts the text **for the ear**: it strips reading-only
+artifacts (markdown, footnote markers, "see the figure below", inline links), spells
+out numbers, and adds pronunciation hints — without summarizing or rewriting the
+author's argument. Pass `--raw` to skip that pass and read the text verbatim (markdown
+is still stripped deterministically). If the adapt pass looks like it condensed a long
+essay, `ingest` warns you and suggests `--raw`. The model/retry knobs reuse
+`[pipeline.ingest]` and `[pipeline.ingest_fetch]` in `config/pipeline.toml`.
 
 ## Architecture
 
