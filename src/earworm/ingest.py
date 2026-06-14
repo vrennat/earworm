@@ -186,6 +186,7 @@ def ingest_source(
     date: Optional[str] = None,
     raw: bool = False,
     model: Optional[str] = None,
+    source_url: Optional[str] = None,
     p: Optional[Paths] = None,
     _fetch: Optional[Callable[..., str]] = None,
     _adapt: Optional[Callable[..., str]] = None,
@@ -195,9 +196,10 @@ def ingest_source(
 
     `source` is a file path, an http(s) URL, or "-" for stdin. With `raw`, the text
     is used as-is (markdown stripped to prose); otherwise it goes through the Claude
-    audio-adaptation pass. URLs are always fetched + extracted by Claude. Returns a
-    result dict (run_id, paths, word counts, and a `warning` if the adapt pass looks
-    like it condensed the essay).
+    audio-adaptation pass. URLs are always fetched + extracted by Claude. `source_url`
+    overrides the show-note source link — use it to read text from a file/stdin while
+    citing the original web URL. Returns a result dict (run_id, paths, word counts,
+    and a `warning` if the adapt pass looks like it condensed the essay).
     """
     p = p or paths()
     p.ensure_dirs()
@@ -228,6 +230,9 @@ def ingest_source(
 
     if not text.strip():
         raise ValueError("ingest source is empty")
+
+    if source_url:  # explicit citation overrides the derived file/stdin/url ref
+        source_ref = source_url
 
     meta, body_src = parse(text)
     resolved_title = title or derive_title(body_src, fallback=title_seed, meta=meta)

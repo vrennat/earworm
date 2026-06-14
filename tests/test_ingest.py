@@ -244,6 +244,24 @@ def test_ingest_archives_source_and_report_in_run_dir() -> None:
         assert (p.inbox_scripts / f"{res['run_id']}.md").exists()
 
 
+def test_ingest_source_url_override_sets_shownote_source() -> None:
+    # read the text from stdin/a file but cite a canonical URL in the show notes
+    with tempfile.TemporaryDirectory() as tmp:
+        p = _paths(tmp)
+        res = ingest_source(
+            "-",
+            raw=True,
+            title="Cited",
+            date="2026-06-14",
+            p=p,
+            source_url="https://darioamodei.com/essay/x",
+            _stdin=lambda: "Body text here.",
+        )
+        _, sources = shownotes.extract(p.runs / res["run_id"] / "report.md")
+        assert any("darioamodei.com/essay/x" in s for s in sources)
+        assert res["source"] == "https://darioamodei.com/essay/x"
+
+
 def test_ingest_warns_when_adapt_overcondenses() -> None:
     with tempfile.TemporaryDirectory() as tmp:
         p = _paths(tmp)

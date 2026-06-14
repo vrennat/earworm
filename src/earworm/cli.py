@@ -61,6 +61,7 @@ def _cmd_ingest(args: argparse.Namespace) -> int:
             date=args.date,
             raw=args.raw,
             model=args.model,
+            source_url=args.source_url,
         )
     except Exception as exc:  # noqa: BLE001 - report + non-zero exit
         print(f"ingest failed: {type(exc).__name__}: {exc}", file=sys.stderr)
@@ -222,6 +223,11 @@ def build_parser() -> argparse.ArgumentParser:
     )
     p_ingest.add_argument(
         "--model", default=None, help="override Claude model for the adapt/fetch passes"
+    )
+    p_ingest.add_argument(
+        "--source-url",
+        default=None,
+        help="cite this URL in the show notes (when reading text from a file/stdin)",
     )
     p_ingest.set_defaults(func=_cmd_ingest)
 
