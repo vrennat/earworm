@@ -15,9 +15,6 @@ import time
 from pathlib import Path
 from typing import Optional
 
-from mutagen.id3 import COMM, ID3, TALB, TCON, TDRC, TIT2, TLEN, TPE1
-from mutagen.mp3 import MP3
-
 from . import db, feed, shownotes, transcript
 from .config import paths, show_config, voice_config
 from .frontmatter import parse
@@ -29,6 +26,11 @@ def content_hash(body: str) -> str:
 
 
 def _tag(mp3_path: Path, *, title: str, date: str, notes: str, duration_sec: float) -> None:
+    # mutagen imported lazily so non-render commands (and the watch-policy tests)
+    # don't pull the audio stack.
+    from mutagen.id3 import COMM, TALB, TCON, TDRC, TIT2, TLEN, TPE1
+    from mutagen.mp3 import MP3
+
     show = show_config()
     audio = MP3(str(mp3_path))
     if audio.tags is None:
@@ -103,6 +105,8 @@ def render_script_file(
     if segments:
         transcript_path = p.episodes / f"{slug}.vtt"
         transcript_path.write_text(transcript.build_vtt(segments))
+
+    from mutagen.mp3 import MP3
 
     duration_sec = MP3(str(audio_path)).info.length
     summary, sources = shownotes.extract(Path(report_path) if report_path else None)
@@ -203,23 +207,60 @@ def publish_unpublished(log=print) -> int:
     return published
 
 
+# A script that keeps throwing is retried with exponential backoff (not every
+# poll), so one broken file can't pin the CPU re-running synthesis every 2s. The
+# backoff resets the moment the file is edited (mtime changes), so fixing a script
+# gets it picked up on the next poll instead of waiting out the delay.
+_RETRY_BASE_SECONDS = 30.0
+_RETRY_MAX_SECONDS = 3600.0
+
+# A failure record: (mtime when it failed, consecutive failure count, monotonic
+# time of the next allowed attempt).
+_Failure = tuple[float, int, float]
+
+
+def _retry_backoff(count: int) -> float:
+    """Exponential backoff for the `count`-th consecutive failure, capped."""
+    return min(_RETRY_BASE_SECONDS * 2 ** (count - 1), _RETRY_MAX_SECONDS)
+
+
+def _is_due(prev: Optional[_Failure], mtime: float, now: float) -> bool:
+    """Whether a script should be (re)attempted now: never failed, edited since it
+    failed (mtime changed), or its backoff window has elapsed."""
+    if prev is None:
+        return True
+    fail_mtime, _count, next_try = prev
+    return mtime != fail_mtime or now >= next_try
+
+
 def watch(poll_seconds: float = 2.0, log=print) -> None:
     """Poll inbox/scripts for *.md and render each. Loads the engine once (warm)."""
     p = paths()
     p.ensure_dirs()
     engine = get_engine(voice_config())
     log(f"[watch] engine={engine.name}  watching {p.inbox_scripts}")
-    seen_failures: set[str] = set()
+    failures: dict[str, _Failure] = {}
     while True:
+        now = time.monotonic()
         for script in sorted(p.inbox_scripts.glob("*.md")):
-            key = f"{script.name}"
+            key = script.name
+            try:
+                mtime = script.stat().st_mtime
+            except OSError:
+                continue  # vanished between glob and stat (moved/deleted); skip
+            prev = failures.get(key)
+            if not _is_due(prev, mtime, now):
+                continue  # unchanged since it failed and still inside its backoff window
             try:
                 result = render_script_file(script, engine, log=log)
                 log(f"[watch] {result['status']}: {result.get('title')} "
                     f"({result.get('duration_sec', '?')}s)")
-                seen_failures.discard(key)
+                failures.pop(key, None)
             except Exception as exc:  # noqa: BLE001 - keep the watcher alive
-                if key not in seen_failures:
-                    log(f"[watch] ERROR rendering {script.name}: {type(exc).__name__}: {exc}")
-                    seen_failures.add(key)
+                count = prev[1] + 1 if prev and prev[0] == mtime else 1
+                backoff = _retry_backoff(count)
+                failures[key] = (mtime, count, time.monotonic() + backoff)
+                if count == 1:  # log once per failure streak, not every retry
+                    log(f"[watch] ERROR rendering {script.name}: {type(exc).__name__}: {exc}"
+                        f"  (retrying in {int(backoff)}s unless edited)")
         time.sleep(poll_seconds)
