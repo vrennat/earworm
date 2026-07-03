@@ -40,4 +40,5 @@ worker/wrangler.jsonc
 
 # Local session / editor state
 .claude/
+.playwright-mcp/
 .DS_Store
