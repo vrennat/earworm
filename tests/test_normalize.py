@@ -54,6 +54,18 @@ def main() -> int:
     # single letters and ordinary words are untouched
     check("I is a letter", "I is a letter")
     check("the cat sat", "the cat sat")
+    # Roman numerals are spoken as number words, not letter-spelled ("II" -> "I.I.")
+    check("World War II reshaped Europe", "World War two reshaped Europe")
+    check("Henry VIII and Section XIII", "Henry eight and Section thirteen")
+    # real all-caps words / word-acronyms misaki says correctly stay intact
+    check("CRISPR and the RAISE Act", "CRISPR and the RAISE Act")
+    check("CAR-T therapy", "CAR-T therapy")
+    # ERCOT now has a lexicon entry, so fix #1's derived whitelist leaves it intact
+    check("ERCOT runs the grid", "ERCOT runs the grid")
+    # an all-caps word echoed in lowercase is emphasis -> left for misaki as a word
+    check("It was a HUGE, huge mistake", "It was a HUGE, huge mistake")
+    # a genuine initialism (no lowercase twin) still dot-separates
+    check("The FBI opened a case", "The F.B.I. opened a case")
     # phonetic hints: a one-token hint replaces one preceding word, a two-token
     # hint replaces two; the hint is lowercased and reused for later bare mentions.
     # (Use clearly-unknown names so the assertion doesn't depend on lexicon contents,

@@ -118,6 +118,7 @@ Anthropic = "ænθɹˈɑpɪk"
 DeepMind = "dˈip mˌInd"
 NVIDIA = "ɛnvˈɪdiə"        # "en-VID-ee-ah"
 CUDA = "kˈudə"             # "KOO-dah"
+ERCOT = "ˈɜɹkɑt"           # "UR-kot" (Texas grid operator); else misaki letter-spells it
 # AI researchers / public figures — per-token so each matches alone or in a full name.
 Andrej = "ˈɑndɹA"          # ON-dray
 Karpathy = "kɑɹpˈɑθi"      # kar-PAH-thee

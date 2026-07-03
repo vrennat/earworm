@@ -133,11 +133,37 @@ def _looks_phonetic(hint: str) -> bool:
     letters = [c for c in hint if c.isalpha()]
     return any(c.isupper() for c in letters[1:])
 
+# Roman numerals the dot-expander would otherwise letter-spell (misaki reads "II"
+# as "eye-eye"). Spoken as their number word instead. Only low-ambiguity forms:
+# IV (intravenous) and VI (the vi editor / "six") are left out on purpose.
+_ROMAN_WORDS = {
+    "II": "two", "III": "three", "VII": "seven", "VIII": "eight",
+    "IX": "nine", "XI": "eleven", "XII": "twelve", "XIII": "thirteen",
+}
+_ROMAN_RE = re.compile(r"\b(" + "|".join(sorted(_ROMAN_WORDS, key=len, reverse=True)) + r")\b")
+
+# All-caps tokens that are real words (or word-acronyms) misaki already voices
+# correctly when left intact — dotting them ("R.A.I.S.E.") is the bug. CRISPR ->
+# "crisper", RAISE -> "raise", CAR (in CAR-T) -> "car". ERCOT is handled by a
+# lexicon entry, so fix #1's derived whitelist already covers it.
+_INTACT_WORDS = frozenset({"CRISPR", "RAISE", "CAR"})
+
 # A run of 2+ uppercase letters as a whole word, with an optional plural "s"
-# ("APIs" -> "A.P.I's"). The leading/trailing boundaries keep it whole-word.
+# ("CEOs" -> "C.E.O's"). The leading/trailing boundaries keep it whole-word.
 _ACRONYM = re.compile(r"\b([A-Z]{2,})(s)?\b")
 # Single uppercase letter glued to a single digit: stack codes like D1/R2/S3.
 _ALNUM_CODE = re.compile(r"\b([A-Z])([0-9])\b")
+
+
+def _emphasis_words(text: str) -> frozenset[str]:
+    """Lowercased forms of 4+-letter tokens that appear in the text in non-all-caps
+    form. An all-caps token whose lowercase twin also appears normally is emphasis,
+    not an initialism ("...a HUGE deal, and it is huge"), so misaki reads it fine as
+    a word and the dot-expander leaves it. The 4-char floor avoids collisions
+    between short initialisms and function words (US/us, WHO/who, IT/it)."""
+    return frozenset(
+        tok.lower() for tok in re.findall(r"[A-Za-z]{4,}", text) if not tok.isupper()
+    )
 
 
 def _spell_fraction(frac: str) -> str:
@@ -149,10 +175,12 @@ def _coord(m: re.Match) -> str:
     return f"{sign}{m.group(2)} point {_spell_fraction(m.group(3))} degrees {_HEMI[m.group(4)]}"
 
 
-def _expand_acronym(m: re.Match) -> str:
+def _expand_acronym(m: re.Match, emphasis: frozenset[str] = frozenset()) -> str:
     word, plural = m.group(1), m.group(2) or ""
-    if word in _SAY_AS_WORD:
+    if word in _SAY_AS_WORD or word in _INTACT_WORDS:
         return m.group(0)  # pronounceable word (and its plural): misaki says it
+    if len(word) >= 4 and word.lower() in emphasis:
+        return m.group(0)  # an emphasized ordinary word, not an initialism
     if word in _lexicon_acronyms():
         # Curated IPA lives in the lexicon; keep the word so apply_overrides can
         # rewrite it. A plural takes an apostrophe-s so `\bWORD\b` still matches
@@ -243,8 +271,10 @@ def normalize_for_speech(text: str) -> str:
     text = _DEG.sub(" degrees", text)      # bare ° would otherwise be an unknown-phoneme glitch
     text = _LEADING_MINUS.sub("negative ", text)
     text = _tech_subs(text)                # 2. SQL -> sequel, before the generic acronym pass
+    text = _ROMAN_RE.sub(lambda m: _ROMAN_WORDS[m.group(1)], text)  # 2b. II -> two
     text = _ALNUM_CODE.sub(_alnum_code, text)   # 3. D1 -> D-one
-    text = _ACRONYM.sub(_expand_acronym, text)  # 4. RFC -> R.F.C. (whitelist kept intact)
+    emphasis = _emphasis_words(text)            # words that also appear in non-caps form
+    text = _ACRONYM.sub(lambda m: _expand_acronym(m, emphasis), text)  # 4. RFC -> R.F.C.
     # 5. collapse ellipses + the ".." an acronym at a sentence end produces
     text = _ELLIPSIS_OR_DUPES.sub(lambda m: "." + (" " if m.group(1) else ""), text)
     return text
