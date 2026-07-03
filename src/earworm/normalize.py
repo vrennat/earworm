@@ -93,20 +93,45 @@ _TECH_SUBS = [
     ("SQL", "sequel"),
 ]
 
-# Script-level phonetic hints: "Dario Amodei [ah-mo-DAY]". The bracket follows
-# the name it spells; the hint's whitespace-token count decides how many of the
-# immediately-preceding capitalized words it replaces, so a one-token hint swaps
-# one word ("Amodei [ah-mo-DAY]" -> "ah-mo-DAY", keeping "Dario") and a two-token
-# hint swaps two ("Andrej Karpathy [ON-dray kar-PAH-thee]" -> the full hint).
-# Up to 4 leading capitalized words are captured; the replacement trims to the
-# hint's token count. A per-call cache then rewrites later BARE mentions of the
-# same name to the same spoken form.
-_HINT = re.compile(
-    r"((?:[A-Z][A-Za-z.'’\-]*\s+){0,4}[A-Z][A-Za-z.'’\-]*)\s*\[([^\[\]\n]+)\]"
-)
-# Any bracket left after the hint pass (a hint with no capitalized word before it,
-# or a stray) — keep the inner text, drop the brackets, so Kokoro never voices "[".
+# Script-level phonetic hints: "Dario Amodei [ah-mo-DAY]". The bracket follows the
+# word(s) it respells; the hint's whitespace-token count decides how many of the
+# immediately-preceding tokens it REPLACES (not appends to), so a one-token hint
+# swaps one word ("Amodei [ah-mo-DAY]" -> "ah-mo-DAY", keeping "Dario") and a
+# two-token hint swaps two ("Andrej Karpathy [ON-dray kar-PAH-thee]" -> the full
+# hint). Up to 5 preceding tokens are captured; a token is any run of word chars,
+# so lowercase foreign phrases ("force majeure [forss mah-zhur]"), name particles
+# ("Werner von Braun [von BROWN]"), and digit-bearing tokens ("R2-D2 [ar-too
+# dee-too]") are all eligible — the old capitalized-only pattern left those to the
+# stray pass, which kept BOTH the original and the hint (double-speak). A per-call
+# cache then rewrites later BARE mentions of the same name to the same form.
+_HINT = re.compile(r"((?:[\w.'’\-]+[ \t]+){0,4}[\w.'’\-]+)[ \t]*\[([^\[\]\n]+)\]")
+# Any bracket left after the hint pass (bracket with no word before it, or a plain
+# aside that isn't a respelling) — keep the inner text, drop the brackets, so
+# Kokoro never voices "[".
 _STRAY_BRACKET = re.compile(r"\[([^\[\]\n]+)\]")
+# Trailing possessive on a name being respelled ("Amodei's [ah-mo-DAY]"); split
+# off before matching so the base name resolves, then re-attached to the hint.
+_POSSESSIVE = re.compile(r"['’]s$")
+
+
+def _split_possessive(word: str) -> tuple[str, str]:
+    m = _POSSESSIVE.search(word)
+    return (word[: m.start()], m.group(0)) if m else (word, "")
+
+
+def _looks_phonetic(hint: str) -> bool:
+    """Whether a bracketed span is a phonetic respelling (replace the preceding
+    word) versus a plain aside (leave it, just unwrap the brackets).
+
+    A respelling carries a phonetic signature: a syllable hyphen between letters
+    ("ah-mo-DAY", "mah-zhur") or an interior stress capital ("ON-dray", "DAY").
+    A plain aside ("aside", "see note") has neither. A bare all-lowercase
+    single-syllable hint with no hyphen is indistinguishable from an aside and
+    stays as-is — rare, since the prompt convention always breaks syllables."""
+    if re.search(r"[A-Za-z]-[A-Za-z]", hint):
+        return True
+    letters = [c for c in hint if c.isalpha()]
+    return any(c.isupper() for c in letters[1:])
 
 # A run of 2+ uppercase letters as a whole word, with an optional plural "s"
 # ("APIs" -> "A.P.I's"). The leading/trailing boundaries keep it whole-word.
@@ -153,14 +178,17 @@ def _tech_subs(text: str) -> str:
 
 
 def _apply_phonetic_hints(text: str) -> str:
-    """Strip "Name [hint]" markers, voicing the hint, and reuse it for later bare
-    mentions via a per-call cache.
+    """Replace "Name [hint]" markers with the hint (never voicing both), and reuse
+    it for later bare mentions via a per-call cache.
 
-    Two refinements keep the audio clean. Hints are lowercased so neither our
+    Three refinements keep the audio clean. Hints are lowercased so neither our
     acronym pass nor misaki's own all-caps heuristic mistakes "ON-dray"/"DAY" for
-    letter-by-letter acronyms (misaki reads "ON-dray" as "OH-EN-dray"). And a name
+    letter-by-letter acronyms (misaki reads "ON-dray" as "OH-EN-dray"). A name
     word already in the lexicon keeps its spelling so its curated IPA wins over a
-    coarse free-form hint — the lexicon is verified, hints fill the long tail.
+    coarse free-form hint — the lexicon is verified, hints fill the long tail. And
+    a bracket whose content isn't a respelling (see `_looks_phonetic`) is left for
+    the stray-bracket pass, which unwraps it in place rather than treating a plain
+    aside as a name to overwrite.
     """
     from .lexicon import known_words
 
@@ -169,6 +197,8 @@ def _apply_phonetic_hints(text: str) -> str:
 
     def repl(m: re.Match) -> str:
         name_run, hint = m.group(1), m.group(2).strip()
+        if not hint or not _looks_phonetic(hint):
+            return m.group(0)  # a plain aside, not a respelling -> leave for _STRAY_BRACKET
         tokens = hint.split()
         words = name_run.split()
         n = min(len(tokens), len(words))
@@ -177,16 +207,18 @@ def _apply_phonetic_hints(text: str) -> str:
         if len(replaced) == len(tokens):
             # token/word counts line up -> decide per word, cache the spoken form
             for w, t in zip(replaced, tokens):
-                if w.lower() in known:
-                    out.append(w)                       # lexicon wins for this word
+                base, poss = _split_possessive(w)
+                if base.lower() in known:
+                    out.append(w)                       # lexicon wins; keep incl. possessive
                 else:
-                    out.append(t.lower())
-                    cache[w] = t.lower()
-        elif all(w.lower() in known for w in replaced):
+                    out.append(t.lower() + poss)
+                    cache[base] = t.lower()
+        elif replaced and all(_split_possessive(w)[0].lower() in known for w in replaced):
             out.extend(replaced)                        # whole span is curated
         else:
-            out.append(hint.lower())
-            cache[" ".join(replaced)] = hint.lower()
+            base_last, poss = _split_possessive(replaced[-1]) if replaced else ("", "")
+            out.append(hint.lower() + poss)
+            cache[" ".join([*replaced[:-1], base_last]).strip()] = hint.lower()
         return " ".join(out)
 
     text = _HINT.sub(repl, text)

@@ -63,6 +63,19 @@ def main() -> int:
     check("Talk to Qorvlen Draxhal [KOR-ven DRAKS-hahl] today.",
           "Talk to kor-ven draks-hahl today.")
     check("A stray [aside] survives.", "A stray aside survives.")
+    # a lowercase foreign phrase is REPLACED by its hint, not spoken then hinted
+    check("It was force majeure [forss mah-zhur].", "It was forss mah-zhur.")
+    # a name particle is captured into the replaced span (no dangling "von")
+    check("Werner von Braun [von BROWN] rose.", "Werner von brown rose.")
+    # a one-token hint keeps a preceding particle as-is and respells the name
+    check("Ludwig von Braun [BRAWN] wrote.", "Ludwig von brawn wrote.")
+    # digit-bearing tokens are eligible for a hint (old pattern skipped them,
+    # sending them to the stray pass which kept both the name and the hint)
+    check("Meet R2-D2 [artoo-detoo] here.", "Meet artoo-detoo here.")
+    # a possessive on a respelled unknown name is re-attached after the hint
+    check("Zorblax's [ZOR-blax] plan failed.", "zor-blax's plan failed.")
+    # a bracketed aside with no phonetic signature is left in place (unwrapped)
+    check("The result [see chapter 3] holds.", "The result see chapter 3 holds.")
     # parentheticals -> comma asides (Kokoro gives parens no pause)
     check("The model (released last year) won.", "The model, released last year, won.")
     check("It ended badly (for them).", "It ended badly, for them.")
