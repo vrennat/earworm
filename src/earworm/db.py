@@ -6,6 +6,7 @@ Two tables:
 """
 from __future__ import annotations
 
+import re
 import sqlite3
 from contextlib import contextmanager
 from datetime import datetime, timezone
@@ -100,6 +101,26 @@ def init() -> None:
 
 
 # --- topics queue ---------------------------------------------------------
+
+def normalize_topic(topic: str) -> str:
+    """Fold a topic to a comparison key: lowercase, strip punctuation, collapse
+    whitespace. Catches re-queues of the same question that differ only in casing
+    or punctuation (the duplicate 25-30 = 19-21 re-adds were exact copies)."""
+    return re.sub(r"[^a-z0-9]+", " ", topic.lower()).strip()
+
+
+def find_duplicate_topic(topic: str) -> Optional[sqlite3.Row]:
+    """An existing queued/finished topic whose normalized form matches `topic`, or
+    None. Compared in Python so casing/punctuation differences collapse."""
+    key = normalize_topic(topic)
+    if not key:
+        return None
+    with connect() as conn:
+        for r in conn.execute("SELECT * FROM topics ORDER BY id ASC"):
+            if normalize_topic(r["topic"]) == key:
+                return r
+    return None
+
 
 def add_topic(topic: str, source: str = "manual") -> int:
     with connect() as conn:

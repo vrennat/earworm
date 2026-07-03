@@ -46,6 +46,14 @@ def _cmd_add(args: argparse.Namespace) -> int:
     if not topic:
         print("error: empty topic", file=sys.stderr)
         return 2
+    dup = db.find_duplicate_topic(topic)
+    if dup is not None and not args.force:
+        print(
+            f"error: duplicate of #{dup['id']} [{dup['status']}]: {dup['topic']}\n"
+            f"       re-add with --force, or re-render the existing episode instead.",
+            file=sys.stderr,
+        )
+        return 1
     tid = db.add_topic(topic, source=args.source)
     print(f"queued #{tid} [{args.source}]: {topic}")
     return 0
@@ -203,6 +211,9 @@ def build_parser() -> argparse.ArgumentParser:
     p_add = sub.add_parser("add", help="queue a topic")
     p_add.add_argument("topic", help="topic or pointed question")
     p_add.add_argument("--source", choices=["manual", "auto"], default="manual")
+    p_add.add_argument(
+        "--force", action="store_true", help="queue even if a matching topic already exists"
+    )
     p_add.set_defaults(func=_cmd_add)
 
     p_ingest = sub.add_parser(
