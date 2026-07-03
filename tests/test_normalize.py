@@ -22,6 +22,13 @@ def main() -> int:
     check("AI and LLM and HTTP", "AI and LLM and H.T.T.P.")  # HTTP has no entry -> dotted
     # an acronym with no lexicon entry still dot-separates for a letter-by-letter read
     check("The spec, also called RFC", "The spec, also called R.F.C.")
+    # a non-lexicon acronym at a sentence end must not leave a double period
+    check("We shipped an RFC.", "We shipped an R.F.C.")
+    check("Then came HTTP. Then more.", "Then came H.T.T.P. Then more.")
+    # ellipses are banned by the prompts -> collapse to a single full stop
+    check("Wait... really?", "Wait. really?")
+    check("So on and on…", "So on and on.")
+    check("One… two… three.", "One. two. three.")
     # plural of a lexicon acronym keeps an apostrophe-s so `\bAPI\b` still matches
     # in apply_overrides and misaki voices the /z/ ("API's" -> "[API](/../)'s")
     check("Lots of APIs and LLMs", "Lots of API's and LLM's")

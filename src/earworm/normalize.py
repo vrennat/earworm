@@ -49,6 +49,13 @@ _SENT_COLON = re.compile(r"(?<=[A-Za-z])[ \t]*:[ \t]*")
 _PAREN = re.compile(r"[ \t]*\(([^()\n]+)\)")
 _COMMA_PUNCT = re.compile(r",\s*([.,;!?])")
 
+# Ellipses are banned by the prompts, and an acronym that lands at a sentence end
+# leaves a stray double dot ("API." -> "A.P.I.."). Either run of consecutive dots
+# — or a literal ellipsis char — collapses to a single full stop. A trailing
+# space is only re-emitted when the original had following whitespace, so a
+# sentence-final "A.P.I.." becomes "A.P.I." with no dangling space.
+_ELLIPSIS_OR_DUPES = re.compile(r"[ \t]*(?:\.{2,}|…)([ \t]*)")
+
 _COORD = re.compile(r"(-?)(\d+)\.(\d+)\s*°\s*([NSEW])\b")
 _DEG_C = re.compile(r"°\s?C\b")
 _DEG_F = re.compile(r"°\s?F\b")
@@ -205,5 +212,7 @@ def normalize_for_speech(text: str) -> str:
     text = _LEADING_MINUS.sub("negative ", text)
     text = _tech_subs(text)                # 2. SQL -> sequel, before the generic acronym pass
     text = _ALNUM_CODE.sub(_alnum_code, text)   # 3. D1 -> D-one
-    text = _ACRONYM.sub(_expand_acronym, text)  # 4. API -> A.P.I. (whitelist kept intact)
+    text = _ACRONYM.sub(_expand_acronym, text)  # 4. RFC -> R.F.C. (whitelist kept intact)
+    # 5. collapse ellipses + the ".." an acronym at a sentence end produces
+    text = _ELLIPSIS_OR_DUPES.sub(lambda m: "." + (" " if m.group(1) else ""), text)
     return text
