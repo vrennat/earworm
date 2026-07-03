@@ -11,13 +11,14 @@ these stages drive it. There is no vendor abstraction.
 """
 from __future__ import annotations
 
+import re
 import subprocess
 import time
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Callable, Optional, Sequence
 
-from . import claude
+from . import claude, recent
 
 # Failures the executor treats as retryable: a non-zero/`is_error`/missing-file run
 # (ClaudeError) or a hard timeout.
@@ -140,6 +141,12 @@ class RunContext:
         return self.runs / self.run_id
 
     @property
+    def done_scripts(self) -> Path:
+        # Archive of finished scripts; the cross-episode memory pass reads the last
+        # few from here to tell the writer what NOT to repeat.
+        return self.root / "done" / "scripts"
+
+    @property
     def report_path(self) -> Path:
         return self.run_dir / "report.md"
 
@@ -172,6 +179,68 @@ def _review_section(ctx: RunContext) -> str:
         "spots and missed angles. Address them where you can; acknowledge "
         "uncertainty where you can't."
     )
+
+
+# The macro structures the script rotates through, one per episode, to break the
+# fixed hook -> roadmap -> body -> synthesis -> sign-off template. The catalog is
+# the source of truth for selection; script.md documents the same five for the
+# human prompt-editor (tests/test_recent.py asserts the names stay in sync).
+MACRO_STRUCTURES: tuple[tuple[str, str], ...] = (
+    (
+        "Narrative thread",
+        "Open in the middle of a concrete story, scene, or person. Weave the topic's "
+        "ideas through that thread as it unfolds, and return to the story at the end "
+        "to land the point. Let the narrative carry the structure instead of a "
+        "section-by-section roadmap.",
+    ),
+    (
+        "Single question build",
+        "Pose one specific, genuinely hard question early and make the entire episode a "
+        "build toward answering it. Each section should sharpen or complicate the "
+        "question; the ending delivers your honest answer, even if the answer is "
+        "'it depends, and here's on what.'",
+    ),
+    (
+        "Debate / tension",
+        "Lay out two genuinely competing views. Steelman each in turn so the listener "
+        "feels the pull of both, then land somewhere earned rather than splitting the "
+        "difference. The ending stakes out where you actually come down and why.",
+    ),
+    (
+        "Timeline / evolution",
+        "Trace how something changed over time. Move chronologically through the key "
+        "shifts and, at each one, explain what actually drove the change. The ending "
+        "reflects on where the trajectory points next, without forcing a tidy moral.",
+    ),
+    (
+        "Surprise reframe",
+        "Start by stating the obvious, widely held take plainly and fairly. Then "
+        "systematically dismantle it with the evidence, piece by piece, until the "
+        "listener is standing somewhere they didn't expect. The ending names the new "
+        "frame, not the old one.",
+    ),
+)
+
+
+def _structure_index(run_id: str) -> int:
+    """Deterministically rotate structures by the topic id baked into the run_id
+    (`YYYY-MM-DD-NNNN-slug`), so consecutive episodes get different macro shapes and
+    a re-run of the same topic is reproducible. Falls back to a stable char sum."""
+    m = re.search(r"-(\d{3,})-", run_id)
+    seed = int(m.group(1)) if m else sum(ord(c) for c in run_id)
+    return seed % len(MACRO_STRUCTURES)
+
+
+def _macro_structure(ctx: RunContext) -> str:
+    """The assigned macro structure directive for this episode."""
+    name, desc = MACRO_STRUCTURES[_structure_index(ctx.run_id)]
+    return f"STRUCTURE FOR THIS EPISODE — {name}.\n{desc}"
+
+
+def _recent_episodes_avoid(ctx: RunContext) -> str:
+    """The 'AVOID THESE' block built from the last few finished scripts; empty on a
+    fresh workspace with no history."""
+    return recent.build_avoid_section(ctx.done_scripts)
 
 
 @dataclass(frozen=True)
@@ -226,6 +295,8 @@ STAGES: list[Stage] = [
             "date": c.date,
             "report_path": str(c.report_path),
             "review_section": _review_section(c),
+            "macro_structure": _macro_structure(c),
+            "recent_episodes_avoid": _recent_episodes_avoid(c),
             "script_path": str(c.staged_script),
             "slug": c.run_id,
         },

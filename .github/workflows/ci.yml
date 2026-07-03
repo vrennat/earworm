@@ -25,6 +25,7 @@ jobs:
           python tests/test_transcript.py
           python tests/test_render_watch.py
           python tests/test_dedup.py
+          python tests/test_recent.py
       - uses: astral-sh/setup-uv@v5
       - name: Lockfile is current
         run: uv lock --check
