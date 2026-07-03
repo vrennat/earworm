@@ -18,8 +18,13 @@ def check(text: str, expected: str) -> None:
 def main() -> int:
     # dotted acronyms collapse back to plain letters for display
     check("The I.N.M.I. and O.C.D. link", "The INMI and OCD link")
-    check("built an R.F.C.", "built an RFC")
-    check("in the U.K. and U.S.", "in the UK and US")
+    # a trailing dot at end of the cue is a sentence end -> keep the period
+    check("built an R.F.C.", "built an RFC.")
+    # a mid-text acronym before a Capital word is a compound noun, not a sentence
+    # break ("UK Parliament", "UC Davis") -> the dot just drops
+    check("the U.K. Parliament voted", "the UK Parliament voted")
+    check("at U.C. Davis in 2017", "at UC Davis in 2017")
+    check("in the U.K. and U.S.", "in the UK and US.")
     # the normalizer's plural trick ("C.E.O's") displays as a real plural
     check("many C.E.O's agreed", "many CEOs agreed")
     check("old A.O.L's era", "old AOLs era")

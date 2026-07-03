@@ -30,6 +30,12 @@ def _dedot(m: re.Match) -> str:
         # a dot right before the apostrophe is a possessive ("A.I.'s" -> "AI's");
         # a letter there is the normalizer's plural trick ("C.E.O's" -> "CEOs")
         return letters + ("'s" if head.endswith(".") else "s")
+    # Bare acronym: keep a final period only at the very end of the cue, where it
+    # unambiguously ends a sentence. Mid-text, an acronym followed by a capital is
+    # almost always a compound proper noun ("UK Parliament", "UC Davis", "RAISE
+    # Act"), not a sentence break, so the dot just drops.
+    if head.endswith(".") and not m.string[m.end():]:
+        return letters + "."
     return letters
 
 
