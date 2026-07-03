@@ -56,6 +56,17 @@ _COMMA_PUNCT = re.compile(r",\s*([.,;!?])")
 # sentence-final "A.P.I.." becomes "A.P.I." with no dangling space.
 _ELLIPSIS_OR_DUPES = re.compile(r"[ \t]*(?:\.{2,}|…)([ \t]*)")
 
+# Symbols misaki mis-voices (verified: it already handles %, &, $, and "/" between
+# words correctly, so those are deliberately left alone — normalizing them would
+# be redundant and risks regressing misaki's own number handling):
+#   ~  before a number -> "about" ("~50%" phonemizes to a ❓ glitch + "fifty");
+#   a colon between single digits is a RATIO -> "to" ("3:1" glitches; "3:00", a
+#   clock time with a 2-digit tail, is left for its existing carve-out).
+_APPROX = re.compile(r"~[ \t]*(?=\d)")
+# Ratio = colon with a SINGLE-digit right side ("3:1", "16:9"). A 2-digit tail is
+# a clock time ("3:00", "12:30") and is left for the existing carve-out.
+_RATIO = re.compile(r"\b(\d+)[ \t]*:[ \t]*(\d)(?!\d)")
+
 _COORD = re.compile(r"(-?)(\d+)\.(\d+)\s*°\s*([NSEW])\b")
 _DEG_C = re.compile(r"°\s?C\b")
 _DEG_F = re.compile(r"°\s?F\b")
@@ -270,6 +281,8 @@ def normalize_for_speech(text: str) -> str:
     text = _DEG_F.sub(" degrees Fahrenheit", text)
     text = _DEG.sub(" degrees", text)      # bare ° would otherwise be an unknown-phoneme glitch
     text = _LEADING_MINUS.sub("negative ", text)
+    text = _APPROX.sub("about ", text)     # 1b. ~50 -> about 50 (bare ~ is a G2P glitch)
+    text = _RATIO.sub(r"\1 to \2", text)   #     3:1 -> 3 to 1 (a ratio colon glitches too)
     text = _tech_subs(text)                # 2. SQL -> sequel, before the generic acronym pass
     text = _ROMAN_RE.sub(lambda m: _ROMAN_WORDS[m.group(1)], text)  # 2b. II -> two
     text = _ALNUM_CODE.sub(_alnum_code, text)   # 3. D1 -> D-one

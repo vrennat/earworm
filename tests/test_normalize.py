@@ -51,6 +51,13 @@ def main() -> int:
     check("a postgres db", "a post-gres db")  # case-insensitive
     # preexisting spoken rewrites still work
     check("-12 below", "negative 12 below")
+    # ~ before a number -> "about" (a bare ~ is a G2P glitch); % is left to misaki
+    check("roughly ~50% of them", "roughly about 50% of them")
+    check("~5 million users", "about 5 million users")
+    # a colon between single digits is a ratio; a clock time (2-digit tail) is kept
+    check("a 3:1 ratio", "a 3 to 1 ratio")
+    check("at 3:00 sharp", "at 3:00 sharp")
+    check("a 16:9 frame", "a 16 to 9 frame")
     # single letters and ordinary words are untouched
     check("I is a letter", "I is a letter")
     check("the cat sat", "the cat sat")
