@@ -22,6 +22,7 @@ jobs:
           python tests/test_pipeline.py
           python tests/test_idempotency.py
           python tests/test_ingest.py
+          python tests/test_transcript.py
       - uses: astral-sh/setup-uv@v5
       - name: Lockfile is current
         run: uv lock --check
