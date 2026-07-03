@@ -13,11 +13,12 @@ Three jobs, all deterministic and run before the lexicon overrides:
 
 2. Acronym / technical-term normalization so scripts can be written in plain
    standard form (AI, API, HTTP) and still read correctly:
-   - all-caps acronyms (2+ letters) become dot-separated ("API" -> "A.P.I."),
+   - all-caps acronyms (2+ letters) become dot-separated ("RFC" -> "R.F.C."),
      which forces a reliable letter-by-letter read regardless of misaki's
      acronym heuristics;
-   - a whitelist of pronounceable acronyms (NASA, WASM, CRUD, ...) is left
-     intact so they're spoken as words;
+   - acronyms with a lexicon entry (API, DNS, RAG, LLM, ...) and a whitelist of
+     pronounceable ones (NASA, WASM, CRUD, ...) are left intact so their curated
+     IPA — or misaki's own word reading — wins instead;
    - alphanumeric stack codes expand ("D1" -> "D-one", "R2" -> "R-two");
    - a few technical terms get fixed spellings ("SQL" -> "sequel").
 
@@ -54,14 +55,27 @@ _DEG_F = re.compile(r"°\s?F\b")
 _DEG = re.compile(r"°")
 _LEADING_MINUS = re.compile(r"(?<![\w.])-(?=\d)")
 
-# Acronyms left intact by the dot-expansion pass — either spoken as a plain word
-# or handed off to a custom lexicon pronunciation (e.g. ICANN -> "EYE-can").
+# Acronyms left intact by the dot-expansion pass so a downstream pronunciation
+# wins. Two sources feed the whitelist: this static set of plain pronounceable
+# acronyms that misaki already says as words (NASA, OPEC, ...) or that carry a
+# curated lexicon entry with no all-caps key derivation (ICANN, NVIDIA, CUDA),
+# and — added at match time — every bare all-caps lexicon key (API, DNS, RAG,
+# LLM, ...) via `lexicon.acronym_words()`, so the lexicon's curated IPA is never
+# pre-empted by our coarse "A.P.I.".
 _SAY_AS_WORD = frozenset({
     "WASM", "CRUD", "FOSS", "NASA", "OPEC", "NATO", "RAM", "ROM", "SIM", "PIN",
     "ICANN",   # lexicon gives it "EYE-can", not "I.C.A.N.N."
     "NVIDIA",  # lexicon gives it "en-VID-ee-ah", not "N.V.I.D.I.A."
     "CUDA",    # lexicon gives it "KOO-dah", not "C.U.D.A."
 })
+
+
+def _lexicon_acronyms() -> frozenset[str]:
+    """Bare all-caps lexicon keys, fetched lazily (lru_cached in the lexicon
+    module, so this stays cheap to call per match)."""
+    from .lexicon import acronym_words
+
+    return acronym_words()
 
 # Technical terms misaki mis-speaks letter-by-letter or mangles. Fixed spoken
 # spellings, applied case-insensitively, longest-first (SQLite before SQL).
@@ -106,7 +120,13 @@ def _coord(m: re.Match) -> str:
 def _expand_acronym(m: re.Match) -> str:
     word, plural = m.group(1), m.group(2) or ""
     if word in _SAY_AS_WORD:
-        return m.group(0)
+        return m.group(0)  # pronounceable word (and its plural): misaki says it
+    if word in _lexicon_acronyms():
+        # Curated IPA lives in the lexicon; keep the word so apply_overrides can
+        # rewrite it. A plural takes an apostrophe-s so `\bWORD\b` still matches
+        # ("API's" -> "[API](/../)'s") and misaki voices the /z/ instead of gluing
+        # an extra letter onto the last one.
+        return f"{word}'s" if plural else word
     # Plural: dot the letters but join the "s" with an apostrophe ("CEOs" ->
     # "C.E.O's"). A trailing ".s" makes misaki voice the letter S ("ess"); the
     # apostrophe-s reads as a plural /z/ ("...O-z"). Singular keeps a final dot.

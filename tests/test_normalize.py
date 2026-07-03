@@ -16,13 +16,18 @@ def check(text: str, expected: str) -> None:
 
 
 def main() -> int:
-    # all-caps acronyms -> dot-separated
-    check("We built an API.", "We built an A.P.I..")
-    check("AI and LLM and HTTP", "A.I. and L.L.M. and H.T.T.P.")
+    # acronyms with a lexicon entry are left intact so the lexicon's curated IPA
+    # (not our coarse dot-expansion) pronounces them; API/AI/LLM are all in it.
+    check("We built an API.", "We built an API.")
+    check("AI and LLM and HTTP", "AI and LLM and H.T.T.P.")  # HTTP has no entry -> dotted
+    # an acronym with no lexicon entry still dot-separates for a letter-by-letter read
     check("The spec, also called RFC", "The spec, also called R.F.C.")
-    # plural acronyms read as plurals: dotted letters + apostrophe-s (a trailing
-    # ".s" would voice the letter S; "...I's" reads as the /z/ plural)
-    check("Lots of APIs and LLMs", "Lots of A.P.I's and L.L.M's")
+    # plural of a lexicon acronym keeps an apostrophe-s so `\bAPI\b` still matches
+    # in apply_overrides and misaki voices the /z/ ("API's" -> "[API](/../)'s")
+    check("Lots of APIs and LLMs", "Lots of API's and LLM's")
+    # plural of a non-lexicon acronym dots the letters + apostrophe-s ("CEOs" ->
+    # "C.E.O's"): a trailing ".s" would voice the letter S; "...O's" reads as /z/
+    check("Lots of CEOs met", "Lots of C.E.O's met")
     # NVIDIA/CUDA are whitelisted so the lexicon (not the dot-expander) pronounces them
     check("NVIDIA and CUDA", "NVIDIA and CUDA")
     # say-as-word whitelist is left intact (lexicon handles pronunciation)

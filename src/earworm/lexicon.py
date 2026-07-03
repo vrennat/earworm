@@ -26,6 +26,18 @@ def known_words() -> frozenset[str]:
     return frozenset(w.lower() for w, _ in _entries())
 
 
+@lru_cache(maxsize=1)
+def acronym_words() -> frozenset[str]:
+    """Bare all-caps lexicon keys (2+ letters, e.g. API, DNS, RAG, LLM).
+
+    The normalizer whitelists these so its generic dot-expansion leaves them
+    intact for the lexicon's curated letter-by-letter (or say-as-word) IPA rather
+    than pre-empting it with a coarse "A.P.I.". Without this every acronym with a
+    lexicon entry is rewritten before `apply_overrides` runs, so its entry here is
+    dead code."""
+    return frozenset(w for w, _ in _entries() if re.fullmatch(r"[A-Z]{2,}", w))
+
+
 def apply_overrides(text: str) -> str:
     for word, ipa in _entries():
         # Whole word, case-insensitive (so "Mana"/"mana" both match); the
