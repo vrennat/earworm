@@ -147,6 +147,32 @@ def next_pending() -> Optional[sqlite3.Row]:
         ).fetchone()
 
 
+def claim_next_pending() -> Optional[sqlite3.Row]:
+    """Atomically claim the oldest pending topic (status -> running).
+
+    A single guarded UPDATE, so two concurrent runners (the daily launchd job
+    overlapping a manual run) can never both take the same row. run_id is
+    backfilled by mark_running once the caller has derived it from the row."""
+    with connect() as conn:
+        return conn.execute(
+            "UPDATE topics SET status='running', notes=NULL "
+            "WHERE id=(SELECT id FROM topics WHERE status='pending' ORDER BY id ASC LIMIT 1) "
+            "RETURNING *"
+        ).fetchone()
+
+
+def claim_topic(topic_id: int) -> bool:
+    """Guarded claim of a specific topic. False means it was no longer runnable —
+    e.g. a concurrent run took it between the caller's status check and here."""
+    with connect() as conn:
+        cur = conn.execute(
+            "UPDATE topics SET status='running', notes=NULL "
+            "WHERE id=? AND status IN ('pending','failed')",
+            (topic_id,),
+        )
+        return cur.rowcount == 1
+
+
 def get_topic(topic_id: int) -> Optional[sqlite3.Row]:
     with connect() as conn:
         return conn.execute("SELECT * FROM topics WHERE id=?", (topic_id,)).fetchone()

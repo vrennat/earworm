@@ -38,13 +38,18 @@ def run_one(topic_id: Optional[int] = None, *, model: Optional[str] = None) -> d
     uses its configured model or the pipeline default.
     """
     db.init()
-    row = db.get_topic(topic_id) if topic_id is not None else db.next_pending()
-    if row is None:
-        raise RuntimeError(
-            "no pending topics" if topic_id is None else f"topic {topic_id} not found"
-        )
-    if row["status"] not in ("pending", "failed"):
-        raise RuntimeError(f"topic {row['id']} is '{row['status']}', not runnable")
+    if topic_id is not None:
+        row = db.get_topic(topic_id)
+        if row is None:
+            raise RuntimeError(f"topic {topic_id} not found")
+        if row["status"] not in ("pending", "failed"):
+            raise RuntimeError(f"topic {row['id']} is '{row['status']}', not runnable")
+        if not db.claim_topic(int(row["id"])):
+            raise RuntimeError(f"topic {row['id']} was claimed by a concurrent run")
+    else:
+        row = db.claim_next_pending()
+        if row is None:
+            raise RuntimeError("no pending topics")
 
     tid = int(row["id"])
     topic = row["topic"]
@@ -68,6 +73,7 @@ def run_one(topic_id: Optional[int] = None, *, model: Optional[str] = None) -> d
     )
     ctx.run_dir.mkdir(parents=True, exist_ok=True)
 
+    # The claim above already flipped status; this backfills the run_id.
     db.mark_running(tid, run_id)
     try:
         for stage in stages:

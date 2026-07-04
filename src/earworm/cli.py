@@ -109,9 +109,11 @@ def _cmd_run(args: argparse.Namespace) -> int:
         drained = failed = 0
         while (row := db.next_pending()) is not None:
             try:
-                runner.run_one(model=args.model)
+                # run_one claims atomically; report the row IT took, since a
+                # concurrent drainer may have grabbed the one we peeked.
+                result = runner.run_one(model=args.model)
                 drained += 1
-                print(f"done #{row['id']}: {row['topic']}")
+                print(f"done #{result['topic_id']}: {result['topic']}")
             except Exception as exc:  # noqa: BLE001 - record + continue draining
                 failed += 1
                 print(f"failed #{row['id']}: {type(exc).__name__}: {exc}", file=sys.stderr)
