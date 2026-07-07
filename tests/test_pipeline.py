@@ -197,6 +197,22 @@ def test_run_stage_success_writes_expected_file() -> None:
         assert "cool topic" in seen["prompt"], "prompt vars must be rendered"
 
 
+def test_script_review_vars_include_measured_word_count() -> None:
+    with tempfile.TemporaryDirectory() as tmp:
+        ctx = _ctx(Path(tmp))
+        ctx.staged_script.write_text("---\ntitle: T\n---\n\none two three four five\n")
+        vars_ = stage_by_name("script_review").build_vars(ctx)
+        assert vars_["word_count"] == "5", vars_["word_count"]
+
+
+def test_script_review_never_skips_on_resume() -> None:
+    # the script stage always re-runs on a resumed topic, so a review file left
+    # over from a prior attempt must not short-circuit the pass — it would
+    # describe the previous script and feed the revise stage stale fixes
+    assert stage_by_name("script_review").skip_if_exists is False
+    assert stage_by_name("revise").skip_if_exists is False
+
+
 def test_run_stage_failure_raises_stage_error() -> None:
     with tempfile.TemporaryDirectory() as tmp:
         ctx = _ctx(Path(tmp))

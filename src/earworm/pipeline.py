@@ -19,6 +19,7 @@ from pathlib import Path
 from typing import Any, Callable, Optional, Sequence
 
 from . import claude, recent
+from .frontmatter import parse as _parse_frontmatter
 
 # Failures the executor treats as retryable: a non-zero/`is_error`/missing-file run
 # (ClaudeError) or a hard timeout.
@@ -246,6 +247,14 @@ def _recent_episodes_avoid(ctx: RunContext) -> str:
     return recent.build_avoid_section(ctx.done_scripts)
 
 
+def _script_word_count(ctx: RunContext) -> str:
+    """Measured word count of the staged script body (front-matter excluded),
+    injected into the script-review prompt so the reviewer never has to count
+    words itself — LLM word counts drift by tens of words."""
+    _, body = _parse_frontmatter(ctx.staged_script.read_text())
+    return str(len(body.split()))
+
+
 @dataclass(frozen=True)
 class Stage:
     name: str
@@ -311,9 +320,12 @@ STAGES: list[Stage] = [
         build_vars=lambda c: {
             "script_path": str(c.staged_script),
             "script_review_path": str(c.script_review_path),
+            "word_count": _script_word_count(c),
         },
         expect_file=lambda c: c.script_review_path,
-        skip_if_exists=True,
+        # NOT skip_if_exists: the script stage always re-runs on a resumed topic,
+        # so a review left over from a prior attempt would describe the previous
+        # script and steer the revise pass with stale line-level fixes.
         toggle="script_review",
     ),
     Stage(
