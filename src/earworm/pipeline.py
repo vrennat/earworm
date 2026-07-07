@@ -204,7 +204,9 @@ MACRO_STRUCTURES: tuple[tuple[str, str], ...] = (
         "Debate / tension",
         "Lay out two genuinely competing views. Steelman each in turn so the listener "
         "feels the pull of both, then land somewhere earned rather than splitting the "
-        "difference. The ending stakes out where you actually come down and why.",
+        "difference. The ending stakes out where you actually come down and why — as a "
+        "claim about the world backed by the evidence, never as a story of your own "
+        "mind changing while you researched it.",
     ),
     (
         "Timeline / evolution",
@@ -217,7 +219,8 @@ MACRO_STRUCTURES: tuple[tuple[str, str], ...] = (
         "Start by stating the obvious, widely held take plainly and fairly. Then "
         "systematically dismantle it with the evidence, piece by piece, until the "
         "listener is standing somewhere they didn't expect. The ending names the new "
-        "frame, not the old one.",
+        "frame, not the old one — carried by the evidence, not by narrating that you "
+        "personally used to believe the old frame.",
     ),
 )
 
@@ -298,7 +301,6 @@ STAGES: list[Stage] = [
             "macro_structure": _macro_structure(c),
             "recent_episodes_avoid": _recent_episodes_avoid(c),
             "script_path": str(c.staged_script),
-            "slug": c.run_id,
         },
         expect_file=lambda c: c.staged_script,
     ),

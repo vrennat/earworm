@@ -120,9 +120,12 @@ def build_avoid_section(done_scripts: Path, n: int = 3, max_transitions: int = 1
         "AVOID THESE — used in recent episodes:",
         f"The last {len(scripts)} episodes opened, closed, and pivoted in the ways "
         "below. Do NOT reuse these openings, closings, or transitions, or any close "
-        "paraphrase of them. Find a genuinely different way in, through, and out. "
-        "Repeating these structural moves is the single biggest tell that every "
-        "episode is the same template.",
+        "paraphrase of them. Avoiding the exact words is not enough — also avoid the "
+        "underlying move. If several of these openings state a personal opinion arc, "
+        "a rhetorical question, or a 'here's the obvious view' setup, don't reach for "
+        "that same gambit with fresh words. Find a genuinely different way in, "
+        "through, and out. Repeating these structural moves is the single biggest "
+        "tell that every episode is the same template.",
     ]
     if openings:
         parts.append("\nRecent openings (do not echo this move or cadence):\n" + bullets(openings))
