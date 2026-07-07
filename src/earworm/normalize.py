@@ -130,6 +130,15 @@ def _split_possessive(word: str) -> tuple[str, str]:
     return (word[: m.start()], m.group(0)) if m else (word, "")
 
 
+def _spoken_hint(hint: str) -> str:
+    """A hint's spoken form: lowercased, with syllable hyphens joined by
+    apostrophes. Kokoro's espeak fallback reads a hyphenated respelling as
+    separate stressed chunks ("zoo-rik" -> "ZOO. RIK.", robotic), but an
+    apostrophe-joined one as a single word with natural stress ("zoo'rik" ->
+    zˈuɹɪk) — verified against the production KPipeline G2P."""
+    return hint.lower().replace("-", "'")
+
+
 def _looks_phonetic(hint: str) -> bool:
     """Whether a bracketed span is a phonetic respelling (replace the preceding
     word) versus a plain aside (leave it, just unwrap the brackets).
@@ -220,9 +229,11 @@ def _apply_phonetic_hints(text: str) -> str:
     """Replace "Name [hint]" markers with the hint (never voicing both), and reuse
     it for later bare mentions via a per-call cache.
 
-    Three refinements keep the audio clean. Hints are lowercased so neither our
+    Three refinements keep the audio clean. Hints are lowercased (so neither our
     acronym pass nor misaki's own all-caps heuristic mistakes "ON-dray"/"DAY" for
-    letter-by-letter acronyms (misaki reads "ON-dray" as "OH-EN-dray"). A name
+    letter-by-letter acronyms) and their syllable hyphens are joined with
+    apostrophes (see `_spoken_hint` — hyphenated chunks each get espeak stress
+    and sound robotic). A name
     word already in the lexicon keeps its spelling so its curated IPA wins over a
     coarse free-form hint — the lexicon is verified, hints fill the long tail. And
     a bracket whose content isn't a respelling (see `_looks_phonetic`) is left for
@@ -250,14 +261,14 @@ def _apply_phonetic_hints(text: str) -> str:
                 if base.lower() in known:
                     out.append(w)                       # lexicon wins; keep incl. possessive
                 else:
-                    out.append(t.lower() + poss)
-                    cache[base] = t.lower()
+                    out.append(_spoken_hint(t) + poss)
+                    cache[base] = _spoken_hint(t)
         elif replaced and all(_split_possessive(w)[0].lower() in known for w in replaced):
             out.extend(replaced)                        # whole span is curated
         else:
             base_last, poss = _split_possessive(replaced[-1]) if replaced else ("", "")
-            out.append(hint.lower() + poss)
-            cache[" ".join([*replaced[:-1], base_last]).strip()] = hint.lower()
+            out.append(_spoken_hint(hint) + poss)
+            cache[" ".join([*replaced[:-1], base_last]).strip()] = _spoken_hint(hint)
         return " ".join(out)
 
     text = _HINT.sub(repl, text)

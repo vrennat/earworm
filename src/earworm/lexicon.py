@@ -38,6 +38,14 @@ def acronym_words() -> frozenset[str]:
     return frozenset(w for w, _ in _entries() if re.fullmatch(r"[A-Z]{2,}", w))
 
 
+# A hyphen+digit tail glued to an override is DROPPED by misaki's link parser:
+# "[GPT](/…/)-4" voices as "G P T" with no "four" (verified via KPipeline G2P).
+# Spacing the hyphen out restores it ("G P T four"). Alpha tails ("-free",
+# "-first") are voiced glued, which is how English says those compounds, so
+# only digit tails are rewritten.
+_DIGIT_TAIL = re.compile(r"(\]\(/[^()]*/\))-(?=\d)")
+
+
 def apply_overrides(text: str) -> str:
     for word, ipa in _entries():
         # Whole word, case-insensitive (so "Mana"/"mana" both match); the
@@ -45,4 +53,4 @@ def apply_overrides(text: str) -> str:
         # Preserve the matched casing in the displayed text via group(0).
         pattern = re.compile(rf"(?<!\[)\b{re.escape(word)}\b(?!\]\()", re.IGNORECASE)
         text = pattern.sub(lambda m: f"[{m.group(0)}](/{ipa}/)", text)
-    return text
+    return _DIGIT_TAIL.sub(r"\1 ", text)

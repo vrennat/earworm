@@ -74,25 +74,27 @@ def main() -> int:
     # a genuine initialism (no lowercase twin) still dot-separates
     check("The FBI opened a case", "The F.B.I. opened a case")
     # phonetic hints: a one-token hint replaces one preceding word, a two-token
-    # hint replaces two; the hint is lowercased and reused for later bare mentions.
+    # hint replaces two; the hint is lowercased, its syllable hyphens joined with
+    # apostrophes (hyphenated chunks each get espeak stress -> robotic read), and
+    # the spoken form is reused for later bare mentions.
     # (Use clearly-unknown names so the assertion doesn't depend on lexicon contents,
     # which intentionally let a curated IPA win over a hint for known names.)
     check("Meet Zylonth [zy-LONTH] now. Zylonth waved.",
-          "Meet zy-lonth now. zy-lonth waved.")
+          "Meet zy'lonth now. zy'lonth waved.")
     check("Talk to Qorvlen Draxhal [KOR-ven DRAKS-hahl] today.",
-          "Talk to kor-ven draks-hahl today.")
+          "Talk to kor'ven draks'hahl today.")
     check("A stray [aside] survives.", "A stray aside survives.")
     # a lowercase foreign phrase is REPLACED by its hint, not spoken then hinted
-    check("It was force majeure [forss mah-zhur].", "It was forss mah-zhur.")
+    check("It was force majeure [forss mah-zhur].", "It was forss mah'zhur.")
     # a name particle is captured into the replaced span (no dangling "von")
     check("Werner von Braun [von BROWN] rose.", "Werner von brown rose.")
     # a one-token hint keeps a preceding particle as-is and respells the name
     check("Ludwig von Braun [BRAWN] wrote.", "Ludwig von brawn wrote.")
     # digit-bearing tokens are eligible for a hint (old pattern skipped them,
     # sending them to the stray pass which kept both the name and the hint)
-    check("Meet R2-D2 [artoo-detoo] here.", "Meet artoo-detoo here.")
+    check("Meet R2-D2 [artoo-detoo] here.", "Meet artoo'detoo here.")
     # a possessive on a respelled unknown name is re-attached after the hint
-    check("Zorblax's [ZOR-blax] plan failed.", "zor-blax's plan failed.")
+    check("Zorblax's [ZOR-blax] plan failed.", "zor'blax's plan failed.")
     # a bracketed aside with no phonetic signature is left in place (unwrapped)
     check("The result [see chapter 3] holds.", "The result see chapter 3 holds.")
     # parentheticals -> comma asides (Kokoro gives parens no pause)
@@ -101,6 +103,17 @@ def main() -> int:
     # idempotent (a second pass over already-normalized text is a no-op)
     sample = "API and SQL and D1 and APIs and Zylonth [zy-LONTH] (an aside)"
     assert n(n(sample)) == n(sample), "normalize is not idempotent"
+
+    # lexicon: a hyphen+digit tail glued to an override would be dropped by
+    # misaki's link parser ("[GPT](/…/)-4" says "G P T", no "four") -> spaced out.
+    # Alpha tails are left glued (that's how English voices "tokenizer-free").
+    from earworm.lexicon import _DIGIT_TAIL
+
+    assert _DIGIT_TAIL.sub(r"\1 ", "[GPT](/ʤˈi pˈi tˈi/)-4 won") == \
+        "[GPT](/ʤˈi pˈi tˈi/) 4 won"
+    assert _DIGIT_TAIL.sub(r"\1 ", "[GPT](/ʤˈi pˈi tˈi/)-3.5 lost") == \
+        "[GPT](/ʤˈi pˈi tˈi/) 3.5 lost"
+    assert _DIGIT_TAIL.sub(r"\1 ", "[AI](/ˌAˈI/)-first plan") == "[AI](/ˌAˈI/)-first plan"
 
     print("all normalize tests passed")
     return 0
