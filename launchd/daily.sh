@@ -8,12 +8,17 @@
 #   3. run x N       drain exactly EPISODES_PER_DAY pending topics -> N scripts
 #
 # The always-on `watch` daemon renders + publishes the resulting scripts, so this
-# yields EPISODES_PER_DAY new episodes per day. The queue is topped up to exactly
-# the day's quota and then drained to it, so the buffer stays bounded near zero.
+# yields EPISODES_PER_DAY new episodes per day. autogen is only asked for the
+# shortfall, so the queue can't grow unbounded; it over-proposes against that
+# shortfall (see autogen._CANDIDATE_MARGIN) so semantic-dedup attrition still
+# clears the quota, and any surplus survivor banks as a small buffer that covers a
+# later day when the dedup judge rejects every candidate.
 set -u
 
-# How many episodes to produce per daily run.
-EPISODES_PER_DAY=3
+# How many episodes to produce per daily run. Drives BOTH the autogen top-up
+# (step 2 asks for exactly the shortfall) and the drain count (step 3), so this is
+# the only number to change.
+EPISODES_PER_DAY=1
 
 EARWORM_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 EARWORM="$EARWORM_DIR/.venv/bin/earworm"

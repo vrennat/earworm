@@ -2,7 +2,7 @@
 <!-- Daily episode producer: every day at 07:00, run launchd/daily.sh, which
      recovers crashed runs, tops the queue up to the day's quota (autogen), then
      drains exactly that many topics. The always-on `watch` daemon renders +
-     publishes the results -> EPISODES_PER_DAY new episodes per day (currently 3,
+     publishes the results -> EPISODES_PER_DAY new episodes per day (currently 1,
      set in daily.sh). The logic lives in the wrapper so it composes the stock
      earworm CLI (no custom flags). Tokens are substituted by launchd/install.sh.
      If the Mac is asleep at 07:00, launchd runs it once on the next wake. -->
