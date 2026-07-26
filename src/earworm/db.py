@@ -21,6 +21,7 @@ CREATE TABLE IF NOT EXISTS topics (
     topic       TEXT NOT NULL,
     source      TEXT NOT NULL DEFAULT 'manual' CHECK(source IN ('manual','auto')),
     status      TEXT NOT NULL DEFAULT 'pending' CHECK(status IN ('pending','running','done','failed')),
+    priority    INTEGER NOT NULL DEFAULT 0,  -- higher runs first; timely paper drops jump the queue
     created_at  TEXT NOT NULL,
     notes       TEXT,
     run_id      TEXT,
@@ -45,6 +46,13 @@ CREATE TABLE IF NOT EXISTS episodes (
     feed           TEXT NOT NULL DEFAULT 'default'  -- which RSS feed this episode belongs to
 );
 """
+
+# Columns added to `topics` after its initial schema; applied to existing dbs.
+_TOPIC_MIGRATIONS = {
+    # Run ordering weight. Existing rows backfill to 0 (plain FIFO), so the queue
+    # behaves exactly as before until something is queued with a higher priority.
+    "priority": "ALTER TABLE topics ADD COLUMN priority INTEGER NOT NULL DEFAULT 0",
+}
 
 # Columns added after the initial Phase 1 schema; applied to existing dbs.
 _EPISODE_MIGRATIONS = {
@@ -86,6 +94,10 @@ def init() -> None:
     paths().ensure_dirs()
     with connect() as conn:
         conn.executescript(SCHEMA)
+        topic_cols = {r["name"] for r in conn.execute("PRAGMA table_info(topics)")}
+        for col, ddl in _TOPIC_MIGRATIONS.items():
+            if col not in topic_cols:
+                conn.execute(ddl)
         cols = {r["name"] for r in conn.execute("PRAGMA table_info(episodes)")}
         for col, ddl in _EPISODE_MIGRATIONS.items():
             if col not in cols:
@@ -122,11 +134,41 @@ def find_duplicate_topic(topic: str) -> Optional[sqlite3.Row]:
     return None
 
 
-def add_topic(topic: str, source: str = "manual") -> int:
+def recent_coverage(limit: int = 80) -> list[str]:
+    """Human-readable lines describing what the show has already covered, newest
+    first: each episode as `Title — <thesis/description>` and each queued topic as
+    its full text. Feeds both the autogen generation prompt (so the writer steers
+    clear) and the semantic-dedup gate (so a re-phrased repeat is caught).
+
+    Episodes carry their one-line thesis description, which is what makes semantic
+    overlap legible — two episodes can have unrelated catchy titles ("The Part
+    Nobody Wrote Down" vs "The Recipe Was Right There") yet identical theses.
+    """
+    lines: list[str] = []
+    with connect() as conn:
+        for r in conn.execute(
+            "SELECT title, description FROM episodes WHERE title IS NOT NULL "
+            "ORDER BY id DESC LIMIT ?",
+            (limit,),
+        ):
+            desc = (r["description"] or "").strip().split("\n", 1)[0].strip()
+            lines.append(f"{r['title']} — {desc}" if desc else str(r["title"]))
+        for r in conn.execute(
+            "SELECT topic FROM topics ORDER BY id DESC LIMIT ?", (limit,)
+        ):
+            lines.append(str(r["topic"]))
+    return lines
+
+
+def add_topic(topic: str, source: str = "manual", priority: int = 0) -> int:
+    """Queue a topic. `priority` weights run order — a higher value is claimed
+    before lower ones regardless of age (used to fast-track timely paper drops).
+    """
     with connect() as conn:
         cur = conn.execute(
-            "INSERT INTO topics (topic, source, status, created_at) VALUES (?, ?, 'pending', ?)",
-            (topic, source, now_iso()),
+            "INSERT INTO topics (topic, source, status, priority, created_at) "
+            "VALUES (?, ?, 'pending', ?, ?)",
+            (topic, source, priority, now_iso()),
         )
         return int(cur.lastrowid)
 
@@ -140,15 +182,22 @@ def list_topics(limit: int = 50) -> list[sqlite3.Row]:
         )
 
 
+# Run order for the queue: highest priority first, then oldest-id (FIFO) within a
+# priority band. Kept identical in `next_pending` (peek) and `claim_next_pending`
+# (atomic take) so the row a caller peeks is the row it claims.
+_QUEUE_ORDER = "ORDER BY priority DESC, id ASC"
+
+
 def next_pending() -> Optional[sqlite3.Row]:
     with connect() as conn:
         return conn.execute(
-            "SELECT * FROM topics WHERE status='pending' ORDER BY id ASC LIMIT 1"
+            f"SELECT * FROM topics WHERE status='pending' {_QUEUE_ORDER} LIMIT 1"
         ).fetchone()
 
 
 def claim_next_pending() -> Optional[sqlite3.Row]:
-    """Atomically claim the oldest pending topic (status -> running).
+    """Atomically claim the highest-priority pending topic (status -> running),
+    breaking ties by age.
 
     A single guarded UPDATE, so two concurrent runners (the daily launchd job
     overlapping a manual run) can never both take the same row. run_id is
@@ -156,7 +205,7 @@ def claim_next_pending() -> Optional[sqlite3.Row]:
     with connect() as conn:
         return conn.execute(
             "UPDATE topics SET status='running', notes=NULL "
-            "WHERE id=(SELECT id FROM topics WHERE status='pending' ORDER BY id ASC LIMIT 1) "
+            f"WHERE id=(SELECT id FROM topics WHERE status='pending' {_QUEUE_ORDER} LIMIT 1) "
             "RETURNING *"
         ).fetchone()
 

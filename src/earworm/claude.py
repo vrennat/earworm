@@ -54,15 +54,21 @@ def run_text(
     cwd: Path,
     timeout: int = 300,
     model: str | None = None,
+    allowed_tools: Sequence[str] | None = None,
 ) -> str:
-    """Run claude headless for pure generation (no tools, no file output) and
-    return the final assistant text. Used by the auto-topic generator.
+    """Run claude headless for text generation and return the final assistant text.
+
+    By default no tools are enabled — pure ideation, no permission prompts. Pass
+    `allowed_tools` (e.g. ("WebSearch", "WebFetch")) to let the model consult live
+    sources; those run under `acceptEdits` so they don't block on a prompt, and
+    anything outside the allowlist is denied. Used by the auto-topic generator for
+    source-aware discovery of timely paper drops.
     """
-    cmd = [
-        "claude", "-p",
-        "--output-format", "json",
-        "--tools", "",  # disable all tools: pure ideation, no permission prompts
-    ]
+    cmd = ["claude", "-p", "--output-format", "json"]
+    if allowed_tools:
+        cmd += ["--permission-mode", "acceptEdits", "--allowedTools", " ".join(allowed_tools)]
+    else:
+        cmd += ["--tools", ""]  # disable all tools: pure ideation, no permission prompts
     if model:
         cmd += ["--model", model]
     proc = subprocess.run(

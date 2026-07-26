@@ -54,8 +54,9 @@ def _cmd_add(args: argparse.Namespace) -> int:
             file=sys.stderr,
         )
         return 1
-    tid = db.add_topic(topic, source=args.source)
-    print(f"queued #{tid} [{args.source}]: {topic}")
+    tid = db.add_topic(topic, source=args.source, priority=args.priority)
+    suffix = f" (priority {args.priority})" if args.priority else ""
+    print(f"queued #{tid} [{args.source}]{suffix}: {topic}")
     return 0
 
 
@@ -94,7 +95,8 @@ def _cmd_list(args: argparse.Namespace) -> int:
         print("(queue empty)")
         return 0
     for r in rows:
-        line = f"#{r['id']:>4} {r['status']:<8} [{r['source']:<6}] {r['topic']}"
+        prio = f" p{r['priority']}" if r["priority"] else "   "
+        line = f"#{r['id']:>4} {r['status']:<8} [{r['source']:<6}]{prio} {r['topic']}"
         if r["status"] == "failed" and r["notes"]:
             line += f"  -- {r['notes'][:120]}"
         print(line)
@@ -135,7 +137,9 @@ def _cmd_autogen(args: argparse.Namespace) -> int:
     from . import autogen
 
     try:
-        added = autogen.generate(count=args.count, model=args.model)
+        added = autogen.generate(
+            count=args.count, model=args.model, use_sources=not args.no_sources
+        )
     except Exception as exc:  # noqa: BLE001
         print(f"autogen failed: {type(exc).__name__}: {exc}", file=sys.stderr)
         return 1
@@ -214,6 +218,12 @@ def build_parser() -> argparse.ArgumentParser:
     p_add.add_argument("topic", help="topic or pointed question")
     p_add.add_argument("--source", choices=["manual", "auto"], default="manual")
     p_add.add_argument(
+        "--priority",
+        type=int,
+        default=0,
+        help="run-order weight; higher runs first (fast-track a timely topic)",
+    )
+    p_add.add_argument(
         "--force", action="store_true", help="queue even if a matching topic already exists"
     )
     p_add.set_defaults(func=_cmd_add)
@@ -274,6 +284,11 @@ def build_parser() -> argparse.ArgumentParser:
     p_autogen = sub.add_parser("autogen", help="propose + queue fresh topics from interests.md")
     p_autogen.add_argument("--count", type=int, default=3, help="how many topics to propose")
     p_autogen.add_argument("--model", default=None, help="override Claude model")
+    p_autogen.add_argument(
+        "--no-sources",
+        action="store_true",
+        help="pure ideation — skip the web pass that checks arXiv/lab pages for timely drops",
+    )
     p_autogen.set_defaults(func=_cmd_autogen)
 
     p_watch = sub.add_parser("watch", help="watch inbox and render scripts")
