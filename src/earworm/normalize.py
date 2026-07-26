@@ -16,9 +16,10 @@ Three jobs, all deterministic and run before the lexicon overrides:
    - all-caps acronyms (2+ letters) become dot-separated ("RFC" -> "R.F.C."),
      which forces a reliable letter-by-letter read regardless of misaki's
      acronym heuristics;
-   - acronyms with a lexicon entry (API, DNS, RAG, LLM, ...) and a whitelist of
-     pronounceable ones (NASA, WASM, CRUD, ...) are left intact so their curated
-     IPA — or misaki's own word reading — wins instead;
+   - whitelisted acronyms are left intact so their curated IPA — or misaki's own
+     word reading — wins instead. The whitelist is a static in-code baseline —
+     the lexicon's own acronyms (API, DNS, RAG, LLM, ...) plus pronounceable ones
+     (NASA, WASM, CRUD, ...) — extended by the local, gitignored lexicon;
    - alphanumeric stack codes expand ("D1" -> "D-one", "R2" -> "R-two");
    - a few technical terms get fixed spellings ("SQL" -> "sequel").
 
@@ -74,12 +75,10 @@ _DEG = re.compile(r"°")
 _LEADING_MINUS = re.compile(r"(?<![\w.])-(?=\d)")
 
 # Acronyms left intact by the dot-expansion pass so a downstream pronunciation
-# wins. Two sources feed the whitelist: this static set of plain pronounceable
-# acronyms that misaki already says as words (NASA, OPEC, ...) or that carry a
-# curated lexicon entry with no all-caps key derivation (ICANN, NVIDIA, CUDA),
-# and — added at match time — every bare all-caps lexicon key (API, DNS, RAG,
-# LLM, ...) via `lexicon.acronym_words()`, so the lexicon's curated IPA is never
-# pre-empted by our coarse "A.P.I.".
+# wins. This static set holds plain pronounceable acronyms that misaki already
+# says as words (NASA, OPEC, ...) or that carry a curated lexicon entry with no
+# all-caps key derivation (ICANN, NVIDIA, CUDA). A match here keeps the token
+# exactly as written, plural and all ("PINs", not "PIN's").
 _SAY_AS_WORD = frozenset({
     "WASM", "CRUD", "FOSS", "NASA", "OPEC", "NATO", "RAM", "ROM", "SIM", "PIN",
     "ICANN",   # lexicon gives it "EYE-can", not "I.C.A.N.N."
@@ -87,10 +86,30 @@ _SAY_AS_WORD = frozenset({
     "CUDA",    # lexicon gives it "KOO-dah", not "C.U.D.A."
 })
 
+# Acronyms the pronunciation lexicon owns, as a static baseline: every all-caps
+# key in the tracked config/lexicon.example.toml template.
+#
+# This exists because config/lexicon.toml is gitignored. Deriving the whitelist
+# from it alone (see `_lexicon_acronyms`) made the normalizer's output depend on
+# untracked local config: a fresh clone — and CI — has no lexicon, so every
+# acronym the lexicon was supposed to own got dot-expanded instead ("AI" ->
+# "A.I.", "RAG" -> "R.A.G."), and test_normalize.py passed here while failing
+# there. Keeping the baseline in code makes the whitelist reproducible; a local
+# lexicon entry then supplies the curated IPA on top, and can extend the set but
+# never shrink it.
+_LEXICON_ACRONYMS = frozenset({
+    "AGI", "AI", "API", "CDN", "CIDR", "CLI", "CORS", "CRUD", "CUDA", "DHCP",
+    "DNS", "ERCOT", "FAANG", "FOSS", "GPT", "GUI", "HTTPS", "ICANN", "IDE",
+    "LLM", "NAT", "NLP", "NVIDIA", "ONNX", "ORM", "RAG", "REST", "RLHF",
+    "SDK", "SQL", "SRE", "SSL", "TCP", "TLS", "UDP", "WASM",
+})
+
 
 def _lexicon_acronyms() -> frozenset[str]:
     """Bare all-caps lexicon keys, fetched lazily (lru_cached in the lexicon
-    module, so this stays cheap to call per match)."""
+    module, so this stays cheap to call per match). Additive to the static
+    `_LEXICON_ACRONYMS` baseline — a local lexicon can whitelist more, never
+    less."""
     from .lexicon import acronym_words
 
     return acronym_words()
@@ -201,7 +220,7 @@ def _expand_acronym(m: re.Match, emphasis: frozenset[str] = frozenset()) -> str:
         return m.group(0)  # pronounceable word (and its plural): misaki says it
     if len(word) >= 4 and word.lower() in emphasis:
         return m.group(0)  # an emphasized ordinary word, not an initialism
-    if word in _lexicon_acronyms():
+    if word in _LEXICON_ACRONYMS or word in _lexicon_acronyms():
         # Curated IPA lives in the lexicon; keep the word so apply_overrides can
         # rewrite it. A plural takes an apostrophe-s so `\bWORD\b` still matches
         # ("API's" -> "[API](/../)'s") and misaki voices the /z/ instead of gluing

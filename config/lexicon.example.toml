@@ -10,6 +10,9 @@
 # Tip (avoid guessing): phonemize a word it ALREADY says right and copy the output:
 #   .venv/bin/python -c "from misaki import en; print(en.G2P(trf=False)('red')[0])"
 # WARNING: misaki does not validate the IPA — wrong symbols produce garbled audio.
+# WARNING: never put punctuation in an IPA value. A comma survives into the phoneme
+#   stream and Kokoro voices it as a ~105ms pause mid-sentence. Separate letters with
+#   stress marks (ˌAˈI), not commas. tests/test_normalize.py enforces this.
 #
 # The entries below are a useful starting set for a tech/AI show. Trim or extend
 # to fit your subject matter.
@@ -34,7 +37,10 @@ Pheenix = "fˈinɪks"        # FEE-nix (the drop-catcher, said like "phoenix")
 
 # --- Technology / AI / networking ---
 # Acronyms spelled letter-by-letter
-AI = "ˈA, ˈI"              # "A, I" — comma forces a break so the eɪ/aɪ diphthongs don't glide into one "eye"
+AI = "ˌAˈI"                # "ay-EYE". NO comma: a literal comma survives into the phoneme
+                           # stream and Kokoro voices it as a 105ms mid-sentence pause (measured),
+                           # so "AI models" aired as "AI, models". This is misaki's own reading of
+                           # "A.I." — the diphthongs stay distinct without any break.
 AGI = "ˈA ʤˈi ˈI"
 LLM = "ˌɛl ˌɛl ˈɛm"
 GPT = "ʤˈi pˈi tˈi"

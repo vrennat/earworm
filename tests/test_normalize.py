@@ -104,6 +104,48 @@ def main() -> int:
     sample = "API and SQL and D1 and APIs and Zylonth [zy-LONTH] (an aside)"
     assert n(n(sample)) == n(sample), "normalize is not idempotent"
 
+    # The acronym whitelist must NOT depend on config/lexicon.toml, which is
+    # gitignored: a fresh clone (and CI) has no lexicon, so a lexicon-only
+    # whitelist dot-expanded everything it was meant to own ("AI" -> "A.I.",
+    # "RAG" -> "R.A.G.") and these very assertions passed locally while failing in
+    # CI. Re-run them with the lexicon stubbed empty to prove the static baseline
+    # carries them on its own.
+    import earworm.normalize as normalize
+
+    real_lexicon = normalize._lexicon_acronyms
+    normalize._lexicon_acronyms = lambda: frozenset()
+    try:
+        check("AI and LLM and HTTP", "AI and LLM and H.T.T.P.")
+        check("We built an API.", "We built an API.")
+        check("Lots of APIs and LLMs", "Lots of API's and LLM's")
+        check("GPT and AGI and RLHF", "GPT and AGI and RLHF")
+        check("RAG and REST and CORS and NAT", "RAG and REST and CORS and NAT")
+        check("ERCOT runs the grid", "ERCOT runs the grid")
+        check("NVIDIA and CUDA", "NVIDIA and CUDA")
+    finally:
+        normalize._lexicon_acronyms = real_lexicon
+
+    # No lexicon IPA may contain a comma. A literal comma survives misaki's link
+    # parser into the phoneme stream and Kokoro voices it as a ~105ms pause, so
+    # `AI = "ˈA, ˈI"` aired "AI models" as "AI, models" — a mid-sentence stop that
+    # sounded like the end of a sentence. Use stress marks (ˌAˈI) to separate
+    # letters, never punctuation. The example template is what CI can see; a local
+    # lexicon.toml is checked too when present.
+    import re
+
+    entry = re.compile(r'^\s*(?:"[^"]*"|[\w.\'-]+)\s*=\s*"([^"]*)"')
+    config_dir = Path(__file__).resolve().parent.parent / "config"
+    for name in ("lexicon.example.toml", "lexicon.toml"):
+        path = config_dir / name
+        if not path.exists():
+            continue
+        for lineno, line in enumerate(path.read_text().splitlines(), 1):
+            m = entry.match(line)
+            assert not (m and "," in m.group(1)), (
+                f"{name}:{lineno} IPA contains a comma, which Kokoro voices as a "
+                f"mid-sentence pause: {line.strip()!r}"
+            )
+
     # lexicon: a hyphen+digit tail glued to an override would be dropped by
     # misaki's link parser ("[GPT](/…/)-4" says "G P T", no "four") -> spaced out.
     # Alpha tails are left glued (that's how English voices "tokenizer-free").
