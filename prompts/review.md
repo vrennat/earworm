@@ -10,4 +10,6 @@ Review it against these questions:
 5. Are any findings just restating conventional wisdom? Flag them.
 6. Spot-check the two or three most load-bearing claims against their actual sources (use web search and fetch). If a source does not support the claim as the report states it, flag it with the correction. Also check: does any finding rest solely on a company announcement, vendor report, or advocacy org? If so, attempt to find independent corroboration. If none exists, recommend the finding be cut or explicitly labeled speculative in the script.
 
-Output a concise review (under 500 words) to {{review_path}}. Be specific — name the weak spots and suggest what to look for. This review will be given to the script-writer as context.
+Report every weak spot you find, including ones you're unsure about — the script-writer decides what to act on, and a problem you drop here ships. Don't filter for importance. Keep each finding to a line or two: name the specific claim or section, say what's wrong, and say what to look for instead.
+
+Write the review to {{review_path}}. This review is handed to the script-writer as context.

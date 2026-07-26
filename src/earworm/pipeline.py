@@ -247,6 +247,22 @@ def _recent_episodes_avoid(ctx: RunContext) -> str:
     return recent.build_avoid_section(ctx.done_scripts)
 
 
+# The show's voice rules — banned phrases, density targets, TTS constraints. Every
+# script-stage pass needs the same list in a different mode (write to it, flag
+# departures, cut them), and each pass is a separate `claude` call with no shared
+# context.
+#
+# One partial, not three hand-maintained copies. The copies had already drifted:
+# of the eleven banned tease phrases the writer was given, script_revise.md listed
+# four and script_review.md ten. A phrase is only actually banned if all three
+# passes know about it, since the reviser is the last one to touch the script.
+VOICE_PARTIAL = "_voice.md"
+
+
+def _voice(ctx: RunContext) -> str:
+    return (ctx.prompts / VOICE_PARTIAL).read_text().strip()
+
+
 def _script_word_count(ctx: RunContext) -> str:
     """Measured word count of the staged script body (front-matter excluded),
     injected into the script-review prompt so the reviewer never has to count
@@ -309,6 +325,7 @@ STAGES: list[Stage] = [
             "review_section": _review_section(c),
             "macro_structure": _macro_structure(c),
             "recent_episodes_avoid": _recent_episodes_avoid(c),
+            "voice": _voice(c),
             "script_path": str(c.staged_script),
         },
         expect_file=lambda c: c.staged_script,
@@ -321,6 +338,7 @@ STAGES: list[Stage] = [
             "script_path": str(c.staged_script),
             "script_review_path": str(c.script_review_path),
             "word_count": _script_word_count(c),
+            "voice": _voice(c),
         },
         expect_file=lambda c: c.script_review_path,
         # NOT skip_if_exists: the script stage always re-runs on a resumed topic,
@@ -335,6 +353,7 @@ STAGES: list[Stage] = [
         build_vars=lambda c: {
             "script_path": str(c.staged_script),
             "script_review_path": str(c.script_review_path),
+            "voice": _voice(c),
         },
         expect_file=lambda c: c.staged_script,
         # Bound to the script_review toggle (its only input). Skipped with it.

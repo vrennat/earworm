@@ -16,7 +16,7 @@ from pathlib import Path
 
 from earworm import claude
 from earworm.config import paths
-from earworm.pipeline import stage_by_name
+from earworm.pipeline import RunContext, stage_by_name
 
 
 def main() -> int:
@@ -43,18 +43,33 @@ def main() -> int:
         else ""
     )
 
-    prompt = claude.render_prompt(
-        p.prompts / "script.md",
+    # Build the stage's own vars (voice rules, assigned macro structure, the
+    # cross-episode AVOID block) rather than hand-listing them here — a prompt
+    # variable added to script.md must not silently render as literal braces.
+    # The slug carries the topic id, so the macro structure matches what the
+    # original run would have been assigned.
+    stage = stage_by_name("script")
+    ctx = RunContext(
+        root=p.root,
+        prompts=p.prompts,
+        runs=p.runs,
+        inbox_scripts=p.inbox_scripts,
+        run_id=args.slug,
+        topic=args.slug,
         date=args.date,
-        report_path=str(report),
-        review_section=review_section,
-        script_path=str(script_path),
-        slug=args.slug,
+        review_enabled=review.exists(),
     )
+    prompt_vars = stage.build_vars(ctx)
+    # This run's report and output live outside the usual run_dir layout.
+    prompt_vars["report_path"] = str(report)
+    prompt_vars["review_section"] = review_section
+    prompt_vars["script_path"] = str(script_path)
+
+    prompt = claude.render_prompt(p.prompts / stage.prompt_file, **prompt_vars)
     claude.run(
         prompt,
         cwd=p.root,
-        allowed_tools=stage_by_name("script").allowed_tools,
+        allowed_tools=stage.allowed_tools,
         expect_file=script_path,
         timeout=900,
         model=args.model,

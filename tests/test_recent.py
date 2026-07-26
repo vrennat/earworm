@@ -12,13 +12,17 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "src"))
 
-from earworm import recent  # noqa: E402
+from earworm import claude, recent  # noqa: E402
 from earworm.pipeline import (  # noqa: E402
     MACRO_STRUCTURES,
+    STAGES,
+    VOICE_PARTIAL,
     _macro_structure,
     _structure_index,
     RunContext,
 )
+
+REPO = Path(__file__).resolve().parent.parent
 
 SAMPLE = """---
 title: A Test Episode
@@ -134,9 +138,50 @@ def test_macro_structure_directive_well_formed() -> None:
 
 def test_script_prompt_lists_every_macro_structure() -> None:
     # the catalog in pipeline.py and the menu in script.md must not drift
-    script_md = (Path(__file__).resolve().parent.parent / "prompts" / "script.md").read_text()
+    script_md = (REPO / "prompts" / "script.md").read_text()
     for name, _ in MACRO_STRUCTURES:
         assert name in script_md, f"macro structure {name!r} missing from script.md"
+
+
+def _rendered_stage_prompts(tmp: str) -> dict[str, str]:
+    """Render every real stage prompt against a minimal workspace."""
+    root = Path(tmp)
+    ctx = RunContext(
+        root=root,
+        prompts=REPO / "prompts",  # the real prompts, not a fixture
+        runs=root / "runs",
+        inbox_scripts=root / "inbox",
+        run_id="2026-06-29-0020-foo",
+        topic="foo",
+        date="2026-06-29",
+        review_enabled=True,
+    )
+    ctx.run_dir.mkdir(parents=True)
+    # script_review reads the staged script to measure its word count
+    ctx.staged_script.write_text("---\ntitle: T\n---\n\nA staged script body.\n")
+    return {
+        s.name: claude.render_prompt(ctx.prompts / s.prompt_file, **s.build_vars(ctx))
+        for s in STAGES
+    }
+
+
+def test_every_stage_prompt_renders_with_no_leftover_placeholders() -> None:
+    """Guards prompt/pipeline drift in both directions: a `{{var}}` added to a
+    prompt with no matching build_vars entry ships the literal braces to Claude."""
+    with tempfile.TemporaryDirectory() as tmp:
+        for name, text in _rendered_stage_prompts(tmp).items():
+            assert "{{" not in text, f"unrendered placeholder in {name} prompt"
+
+
+def test_voice_partial_reaches_every_script_stage() -> None:
+    """The writer, reviewer, and reviser must all see the same voice rules — a
+    phrase banned for the writer is only enforced if the other two look for it."""
+    sentinel = "Hint placement is load-bearing"
+    assert sentinel in (REPO / "prompts" / VOICE_PARTIAL).read_text()
+    with tempfile.TemporaryDirectory() as tmp:
+        rendered = _rendered_stage_prompts(tmp)
+    for name in ("script", "script_review", "revise"):
+        assert sentinel in rendered[name], f"voice rules missing from {name} prompt"
 
 
 def main() -> int:

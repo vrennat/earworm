@@ -166,6 +166,8 @@ def test_active_stages_both_quality_passes_off() -> None:
 def _ctx(root: Path) -> RunContext:
     (root / "prompts").mkdir(parents=True, exist_ok=True)
     (root / "prompts" / "research.md").write_text("topic={{topic}} out={{report_path}}")
+    # every script-stage prompt interpolates the shared voice partial
+    (root / "prompts" / "_voice.md").write_text("VOICE RULES")
     (root / "runs" / "RID").mkdir(parents=True, exist_ok=True)
     return RunContext(
         root=root,
