@@ -31,6 +31,17 @@ DISCOVERY_TOOLS = ("WebSearch", "WebFetch")
 PAPER_PRIORITY = 1
 _PAPER_TAG = re.compile(r"^paper\s*:\s*", re.IGNORECASE)
 
+# Extra candidates requested beyond the caller's `count`, because the semantic
+# dedup gate below is a lossy filter and asking for exactly N regularly yielded
+# fewer than N — sometimes zero. With ~90 episodes covered, whole batches came
+# back as "all overlapped recent", which left the queue dry and stalled the daily
+# job for two days (every `earworm run` failing with "no pending topics"). A
+# margin means normal attrition still clears the day's quota, and any surplus
+# survivor is queued rather than discarded: it banks as a buffer that carries the
+# next day when the judge rejects everything. Growth stays bounded because
+# launchd/daily.sh only autogens the shortfall when the queue is below quota.
+_CANDIDATE_MARGIN = 3
+
 # The prompt asks for bare topics and nothing else, but the model still wraps them
 # in chat furniture — a "here are 3 topics:" preamble, a trailing "Sources:" heading,
 # a citation list. Those lines used to parse as topics and reach the queue, where a
@@ -69,19 +80,26 @@ def _parse_proposals(text: str, count: int | None = None) -> list[tuple[str, int
 
 
 def generate(count: int = 3, model: str | None = None, *, use_sources: bool = True) -> list[str]:
-    """Propose, screen, and queue up to `count` fresh auto topics. Returns the
-    topics actually added (after lexical + semantic dedup). `use_sources` lets the
-    discovery pass consult the web for timely drops; it falls back to pure ideation
-    if the sourced pass fails, so autogen still produces topics offline."""
+    """Propose, screen, and queue fresh auto topics for a quota of `count`.
+
+    Asks the model for `count + _CANDIDATE_MARGIN` candidates so the lossy dedup
+    gate still clears the quota, and queues every survivor — so the result can
+    exceed `count`, banking the surplus for a later day when the judge rejects
+    everything. Returns the topics actually added (after lexical + semantic dedup).
+    `use_sources` lets the discovery pass consult the web for timely drops; it
+    falls back to pure ideation if the sourced pass fails, so autogen still
+    produces topics offline.
+    """
     db.init()
     p = paths()
     interests = p.interests.read_text() if p.interests.exists() else ""
     coverage = db.recent_coverage()
+    pool = count + _CANDIDATE_MARGIN
 
     prompt = claude.render_prompt(
         p.prompts / "autogen.md",
         date=date.today().isoformat(),
-        n=str(count),
+        n=str(pool),
         interests=interests.strip() or "(no interests file)",
         recent="\n".join(f"- {t}" for t in coverage) or "(nothing yet)",
     )
@@ -115,7 +133,7 @@ def generate(count: int = 3, model: str | None = None, *, use_sources: bool = Tr
         )
         text = _discover(None)
 
-    proposals = _parse_proposals(text, count)
+    proposals = _parse_proposals(text, pool)
 
     # Layer 1 — lexical: drop exact / punctuation / casing re-adds of anything
     # already queued, and collapse duplicates within this batch.
