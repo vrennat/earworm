@@ -21,14 +21,24 @@ set -u
 EPISODES_PER_DAY=1
 
 EARWORM_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-EARWORM="$EARWORM_DIR/.venv/bin/earworm"
 DB="$EARWORM_DIR/earworm.db"
 
 cd "$EARWORM_DIR" || exit 1
 
+# Never execute the generated .venv/bin/earworm shebang directly. Homebrew
+# removed the Python it pointed at in July 2026, which left both launchd jobs
+# failing before Python could start. `uv run --locked` detects that shape and
+# recreates the environment from uv.lock using uv's managed Python.
+UV="$(command -v uv || true)"
+if [ -z "$UV" ]; then
+    echo "[daily] uv is not on launchd's PATH; run launchd/install.sh" >&2
+    exit 78  # EX_CONFIG
+fi
+EARWORM=("$UV" run --project "$EARWORM_DIR" --locked earworm)
+
 # 1. Crash recovery: a SIGKILLed prior run leaves its topic 'running' and
 #    next_pending() ignores 'running' rows, so it would be orphaned. Requeue it.
-"$EARWORM" reset-stale
+"${EARWORM[@]}" reset-stale
 
 # 2. Top up to the day's quota. autogen only fires for the shortfall, so the
 #    buffer can't grow unbounded. sqlite3 ships with macOS; the db path is fixed
@@ -37,7 +47,7 @@ pending="$(/usr/bin/sqlite3 "$DB" "SELECT COUNT(*) FROM topics WHERE status='pen
 need=$(( EPISODES_PER_DAY - ${pending:-0} ))
 if [ "$need" -gt 0 ]; then
     echo "[daily] $pending pending, need $EPISODES_PER_DAY -> autogen --count $need"
-    "$EARWORM" autogen --count "$need"
+    "${EARWORM[@]}" autogen --count "$need"
 else
     echo "[daily] $pending pending topic(s) in queue (>= $EPISODES_PER_DAY) -> draining $EPISODES_PER_DAY"
 fi
@@ -49,7 +59,7 @@ fi
 failed=0
 for i in $(seq 1 "$EPISODES_PER_DAY"); do
     echo "[daily] run $i/$EPISODES_PER_DAY"
-    if ! "$EARWORM" run; then
+    if ! "${EARWORM[@]}" run; then
         echo "[daily] run $i/$EPISODES_PER_DAY failed" >&2
         failed=$(( failed + 1 ))
     fi

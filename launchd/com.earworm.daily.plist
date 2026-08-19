@@ -24,6 +24,8 @@
         <string>__PATH__</string>
         <key>HOME</key>
         <string>__HOME__</string>
+        <key>PYTHONUNBUFFERED</key>
+        <string>1</string>
     </dict>
     <key>StartCalendarInterval</key>
     <dict>

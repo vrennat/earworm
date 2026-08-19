@@ -8,7 +8,15 @@
     <string>com.earworm.watch</string>
     <key>ProgramArguments</key>
     <array>
-        <string>__EARWORM_DIR__/.venv/bin/earworm</string>
+        <!-- Enter through uv rather than the generated console-script shebang.
+             uv repairs a venv whose Homebrew interpreter was removed. -->
+        <string>/usr/bin/env</string>
+        <string>uv</string>
+        <string>run</string>
+        <string>--project</string>
+        <string>__EARWORM_DIR__</string>
+        <string>--locked</string>
+        <string>earworm</string>
         <string>watch</string>
     </array>
     <key>WorkingDirectory</key>
@@ -19,6 +27,8 @@
         <string>__PATH__</string>
         <key>HOME</key>
         <string>__HOME__</string>
+        <key>PYTHONUNBUFFERED</key>
+        <string>1</string>
     </dict>
     <key>RunAtLoad</key>
     <true/>

@@ -274,16 +274,22 @@ running `earworm publish` — no re-render needed; the episode moves to its new 
 
 ## Scheduling (macOS)
 
-For hands-off operation, `launchd/` ships three agents — a `watch` daemon (renders +
-publishes continuously), a weekday `run` (drains one topic at 07:30), and a Monday
-`autogen` (proposes 3 fresh topics from `interests.md`):
+For hands-off operation, `launchd/` ships two agents — a `watch` daemon that renders and
+publishes continuously, and a daily producer that tops up the queue and drains one topic
+at 07:00:
 
 ```sh
 bash launchd/install.sh        # substitutes paths, loads the agents, starts the watcher
 bash launchd/uninstall.sh      # unload + remove them
 ```
 
-Logs land in `logs/`. On Linux, adapt the three `.plist` files to systemd timers.
+Logs land in `logs/`. On Linux, adapt the two `.plist` files to systemd timers.
+
+Both jobs enter through `uv run --locked` rather than the generated
+`.venv/bin/earworm` shebang. This matters on Homebrew-managed Macs: removing an old
+Python formula otherwise leaves the shebang pointing at a nonexistent interpreter.
+The installer runs `uv sync --locked` up front, and `uv run` recreates that broken
+environment from `uv.lock` if it happens again.
 
 ## Docker
 

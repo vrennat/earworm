@@ -27,6 +27,9 @@ jobs:
           python tests/test_dedup.py
           python tests/test_claim.py
           python tests/test_recent.py
+          python tests/test_launchd.py
+      - name: Launchd shell syntax
+        run: bash -n launchd/install.sh launchd/uninstall.sh launchd/daily.sh
       - uses: astral-sh/setup-uv@v5
       - name: Lockfile is current
         run: uv lock --check

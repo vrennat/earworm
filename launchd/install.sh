@@ -19,6 +19,16 @@ PATH_VAL="$EARWORM_DIR/.venv/bin:$HOME/.local/bin:/opt/homebrew/bin:$HOME/.bun/b
 
 mkdir -p "$LA" "$EARWORM_DIR/logs"
 
+# Validate and repair the locked environment before loading either job. The
+# agents also enter through `uv run --locked`, so a later Homebrew Python cleanup
+# is self-healing instead of an endless EX_CONFIG retry loop.
+UV_BIN="$(command -v uv || true)"
+if [ -z "$UV_BIN" ]; then
+    echo "ERROR: uv is required but is not on PATH" >&2
+    exit 78  # EX_CONFIG
+fi
+"$UV_BIN" sync --project "$EARWORM_DIR" --locked
+
 # Retire the old split agents (weekly autogen + weekday run). The single daily
 # producer below supersedes them; left loaded they would double up.
 for old in com.earworm.autogen com.earworm.run; do
@@ -60,4 +70,4 @@ launchctl kickstart -k "gui/$UID_NUM/com.earworm.watch" 2>/dev/null || true
 echo
 echo "Installed. The renderer (watch) is running now; the daily producer fires"
 echo "every day at 07:00 (one fresh episode/day). Logs: $EARWORM_DIR/logs/"
-echo "Verify with: launchctl list | grep earworm"
+echo "Verify with: launchctl print gui/$UID_NUM/com.earworm.watch"
