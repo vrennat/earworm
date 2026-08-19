@@ -344,6 +344,12 @@ tests/          pipeline + config + normalize + idempotency tests (run: uv run p
 Dockerfile      CPU-only renderer image (Kokoro + ffmpeg, pre-warmed model)
 ```
 
+## Acknowledgments
+
+The script-specificity and anti-template checks draw on Lauren Tan's
+[`unslop`](https://github.com/cursor/plugins/blob/main/pstack/skills/unslop/SKILL.md)
+skill.
+
 ## License
 
 MIT — see [LICENSE](LICENSE). The Kokoro model and weights are Apache-2.0

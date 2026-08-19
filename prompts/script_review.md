@@ -15,6 +15,6 @@ Flag every departure from the rules above, plus these review-only checks:
 7. Word count: the script body is {{word_count}} words, measured by the pipeline — do not recount. If it exceeds 1700 words, name the section that could be cut without losing an essential finding.
 8. Density, sentence by sentence. Name the specific cuttable sentence for each: any sentence restating a point already made in different words; any paragraph where you could delete a sentence and lose no information; any emphasis-only sentence, pure transition sentence, or filler phrase. For each, say "cut" — the fix is deletion, not rewriting.
 
-Report every defect you find, including ones you consider minor. Do not filter for importance — the revise pass decides what to act on, and a defect you drop here ships. Keep each finding to one line: quote the offending text and state the fix.
+Report every defect you find, including ones you consider minor. Do not filter for importance — the revise pass decides what to act on, and a defect you drop here ships. Output only actionable defects. Do not add strengths, praise, "no issues" sections, a summary, or commentary on rules the script followed. Keep each finding to one line: quote the offending text and state the fix.
 
 Write the review to {{script_review_path}}.
