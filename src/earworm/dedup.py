@@ -81,8 +81,10 @@ def parse_duplicate_indices(text: str, n: int, covered: list[str]) -> dict[int, 
             # Local models sometimes expand a reference into {n, reason}. Its
             # meaning is unambiguous; validate it instead of dropping the batch.
             if isinstance(ref, dict):
-                if set(ref) != {"n", "reason"} or not isinstance(ref["reason"], str) or not ref["reason"].strip():
+                if set(ref) not in ({"n"}, {"n", "reason"}):
                     raise ValueError("invalid expanded coverage reference")
+                if "reason" in ref and (not isinstance(ref["reason"], str) or not ref["reason"].strip()):
+                    raise ValueError("invalid expanded coverage reason")
                 ref = ref["n"]
             matches.append(ref)
         if any(type(m) is not int or not 1 <= m <= len(covered) for m in matches):

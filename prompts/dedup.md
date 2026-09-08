@@ -12,5 +12,6 @@ Only the numbered coverage entries count as prior coverage. For every proposal, 
 ## Proposals
 {{candidates}}
 
-Return JSON only: {"decisions":[{"n":1,"matches":[],"reason":"Distinct mechanism"}]}
+Return JSON only. Use integer arrays for matches, for example:
+{"decisions":[{"n":1,"matches":[2,5],"reason":"Possible repeated findings"},{"n":2,"matches":[],"reason":"Distinct mechanism"}]}
 There must be exactly one decision for each proposal number.

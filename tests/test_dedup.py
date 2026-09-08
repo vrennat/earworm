@@ -70,13 +70,16 @@ def _semantic_dedup_tests() -> None:
     expanded["decisions"][0]["matches"] = [{"n": 1, "reason": "Same evidence"}]
     assert dedup.parse_duplicate_indices(json.dumps(expanded), 3, covered) == {1: [covered[0]], 2: [covered[0]]}
 
+    expanded["decisions"][0]["matches"] = [{"n": 1}]
+    assert dedup.parse_duplicate_indices(json.dumps(expanded), 3, covered) == {1: [covered[0]], 2: [covered[0]]}
+
     malformed = ["not json", "{}", '{"decisions": []}', '{"duplicates": []}',
                  '{"decisions": [{"n":1,"n":2,"matches":[1],"reason":"x"}]}']
     for field, value in [("n", True), ("n", 1.5), ("n", "1"), ("n", 4),
                          ("matches", True), ("matches", [3]),
                          ("matches", ["1"]), ("matches", [True]),
                          ("matches", [{"n": True, "reason": "x"}]),
-                         ("matches", [{"n": 1}]), ("matches", [{"n": 1, "reason": ""}]),
+                         ("matches", [{"index": 1}]), ("matches", [{"n": 1, "reason": ""}]),
                          ("matches", [1, 1]), ("matches", [1, 2, 1, 2]), ("reason", ""), ("reason", None)]:
         data = json.loads(json.dumps(search))
         data["decisions"][0][field] = value
