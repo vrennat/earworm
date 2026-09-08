@@ -1,0 +1,36 @@
+{
+  "model": "gemma4:26b",
+  "unique_cases": 12,
+  "orders": [
+    {
+      "archive_order": "original",
+      "cases": 12,
+      "false_negatives": 0,
+      "false_positives": 0,
+      "batches": 3
+    },
+    {
+      "archive_order": "reversed",
+      "cases": 12,
+      "false_negatives": 0,
+      "false_positives": 0,
+      "batches": 3
+    },
+    {
+      "archive_order": "shuffled",
+      "cases": 12,
+      "false_negatives": 0,
+      "false_positives": 0,
+      "batches": 3
+    }
+  ],
+  "batch_seconds": {
+    "n": 9,
+    "min": 5.395,
+    "max": 9.41,
+    "mean": 7.201,
+    "sample_stdev": 1.5
+  },
+  "calls": 18,
+  "production_mutated": false
+}
