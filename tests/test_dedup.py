@@ -73,6 +73,9 @@ def _semantic_dedup_tests() -> None:
     expanded["decisions"][0]["matches"] = [{"n": 1}]
     assert dedup.parse_duplicate_indices(json.dumps(expanded), 3, covered) == {1: [covered[0]], 2: [covered[0]]}
 
+    overflow = {"decisions": [{"n": 1, "matches": [4, 2, 3, 1], "reason": "Closest first"}]}
+    assert dedup.parse_duplicate_indices(json.dumps(overflow), 1, ["a", "b", "c", "d"]) == {1: ["d", "b", "c"]}
+
     malformed = ["not json", "{}", '{"decisions": []}', '{"duplicates": []}',
                  '{"decisions": [{"n":1,"n":2,"matches":[1],"reason":"x"}]}']
     for field, value in [("n", True), ("n", 1.5), ("n", "1"), ("n", 4),

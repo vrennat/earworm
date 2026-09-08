@@ -74,8 +74,8 @@ def parse_duplicate_indices(text: str, n: int, covered: list[str]) -> dict[int, 
     result = {}
     for idx, item in _decisions(text, set(range(1, n + 1)), "matches").items():
         raw = item["matches"]
-        if not isinstance(raw, list) or len(raw) > 3:
-            raise ValueError("expected at most three coverage numbers")
+        if not isinstance(raw, list):
+            raise ValueError("expected coverage numbers")
         matches = []
         for ref in raw:
             # Local models sometimes expand a reference into {n, reason}. Its
@@ -92,7 +92,7 @@ def parse_duplicate_indices(text: str, n: int, covered: list[str]) -> dict[int, 
         if len(set(matches)) != len(matches):
             raise ValueError("repeated coverage number")
         if matches:
-            result[idx] = [covered[m - 1] for m in matches]
+            result[idx] = [covered[m - 1] for m in matches[:3]]
     return result
 
 
