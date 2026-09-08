@@ -42,3 +42,6 @@ worker/wrangler.jsonc
 .claude/
 .playwright-mcp/
 .DS_Store
+
+# Local experiment state
+.lab/

@@ -1,20 +1,8 @@
-"""Semantic dedup gate for proposed topics.
+"""Local semantic screening: find candidate matches, then compare exact pairs.
 
-The lexical guards — `db.normalize_topic` / `find_duplicate_topic` and autogen's
-exact-string filter — only catch re-adds that differ by casing or punctuation.
-They miss the failure that actually shipped a duplicate episode: the same idea
-proposed in entirely different words. "Civilizations keep losing technologies —
-Roman concrete, Damascus steel..." and "Why Hands-On Knowledge Dies Faster Than
-Written Knowledge" share almost no words yet are the same episode; no lexical
-check flags them.
-
-This module closes that gap with a single cheap LLM pass that compares proposed
-topics against what the show has already covered (titles + one-line theses) and
-returns the ones that are the same episode in disguise.
-
-The module is pure and backend-agnostic: it renders the prompt and delegates the
-model call to a `judge` callable the caller supplies (autogen wires in the configured API/local route,
-tests wire in a canned function). The caller owns the fail-open policy.
+An explicit decision for every proposal prevents silent omissions. Confirmation
+separates same-story matches from merely related mechanisms in a long archive.
+The caller supplies the bounded judge; invalid output stops the whole batch.
 """
 from __future__ import annotations
 
@@ -22,14 +10,11 @@ import json
 import re
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Callable, Iterator
+from typing import Callable
 
 
 @dataclass(frozen=True)
 class Duplicate:
-    """A proposed topic the judge flagged as already-covered, with the covered
-    item (or short reason) it collides with."""
-
     candidate: str
     matches: str
 
@@ -38,79 +23,93 @@ def _numbered(items: list[str]) -> str:
     return "\n".join(f"{i}. {t}" for i, t in enumerate(items, 1))
 
 
-def _json_spans(text: str) -> Iterator[str]:
-    """The widest `{...}` and `[...]` spans in `text`, for pulling JSON out of a
-    response wrapped in prose."""
-    for open_ch, close_ch in (("{", "}"), ("[", "]")):
-        start = text.find(open_ch)
-        end = text.rfind(close_ch)
-        if 0 <= start < end:
-            yield text[start : end + 1]
+def _unique_keys(pairs: list[tuple[str, object]]) -> dict:
+    result = {}
+    for key, value in pairs:
+        if key in result:
+            # json.loads otherwise discards an earlier decision without warning.
+            raise ValueError(f"repeated JSON key: {key}")
+        result[key] = value
+    return result
 
 
 def _extract_json(text: str) -> object:
-    """Parse the first JSON value from a model response that may be wrapped in
-    prose or a ```json fence. Raises ValueError if nothing parses."""
     stripped = text.strip()
-    fence = re.search(r"```(?:json)?\s*(.+?)```", stripped, re.DOTALL)
+    fence = re.fullmatch(r"```(?:json)?\s*(.*?)\s*```", stripped, re.DOTALL)
     if fence:
-        stripped = fence.group(1).strip()
-    for candidate in (stripped, *_json_spans(stripped)):
-        try:
-            return json.loads(candidate)
-        except json.JSONDecodeError:
-            continue
-    raise ValueError("no JSON found in judge response")
+        stripped = fence.group(1)
+    return json.loads(stripped, object_pairs_hook=_unique_keys)
 
 
 def render_prompt(prompt_path: Path, candidates: list[str], covered: list[str]) -> str:
-    text = prompt_path.read_text()
-    return text.replace("{{candidates}}", _numbered(candidates)).replace(
-        "{{covered}}", "\n".join(f"- {c}" for c in covered) or "(nothing yet)"
+    return prompt_path.read_text().replace("{{candidates}}", _numbered(candidates)).replace(
+        "{{covered}}", _numbered(covered) or "(nothing yet)"
     )
 
 
-def parse_duplicate_indices(text: str, n: int) -> dict[int, str]:
-    """Map a candidate's 1-based number -> the match reason, from the judge's
-    JSON. Accepts either a bare array or `{"duplicates": [...]}`; entries whose
-    index is out of range or unparseable are dropped."""
+def _decisions(text: str, expected: set[int], field: str) -> dict[int, dict]:
     data = _extract_json(text)
-    items = data.get("duplicates", []) if isinstance(data, dict) else data
+    if not isinstance(data, dict) or set(data) != {"decisions"}:
+        raise ValueError("expected decisions object")
+    items = data["decisions"]
     if not isinstance(items, list):
-        return {}
-    out: dict[int, str] = {}
+        raise ValueError("expected decisions array")
+    result = {}
     for item in items:
-        if not isinstance(item, dict):
+        if not isinstance(item, dict) or set(item) != {"n", field, "reason"}:
+            raise ValueError("invalid decision fields")
+        n = item["n"]
+        if type(n) is not int or n not in expected or n in result:
+            raise ValueError("invalid or repeated proposal number")
+        if not isinstance(item["reason"], str) or not item["reason"].strip():
+            raise ValueError("missing comparison reason")
+        result[n] = item
+    if set(result) != expected:
+        raise ValueError("missing proposal decisions")
+    return result
+
+
+def parse_duplicate_indices(text: str, n: int, covered: list[str]) -> dict[int, str]:
+    """Require complete decisions and resolve matches only to supplied coverage."""
+    result = {}
+    for idx, item in _decisions(text, set(range(1, n + 1)), "duplicate_of").items():
+        match = item["duplicate_of"]
+        if match is None:
             continue
-        try:
-            idx = int(item["n"])
-        except (KeyError, TypeError, ValueError):
-            continue
-        if 1 <= idx <= n:
-            out[idx] = str(item.get("matches", "")).strip()
-    return out
+        if type(match) is not int or not 1 <= match <= len(covered):
+            raise ValueError("invalid coverage number")
+        result[idx] = covered[match - 1]
+    return result
 
 
 def filter_new(
-    candidates: list[str],
-    covered: list[str],
-    *,
-    judge: Callable[[str], str],
+    candidates: list[str], covered: list[str], *, judge: Callable[[str], str],
     prompt_path: Path,
 ) -> tuple[list[str], list[Duplicate]]:
-    """Split `candidates` into (kept, dropped) by asking `judge` which duplicate
-    `covered`. `judge` takes the rendered prompt and returns the model's text.
+    """Return kept/dropped topics; both calls must succeed before anything queues.
 
-    Raises whatever `judge` raises and ValueError on an unparseable response, so
-    the caller can decide the fail-open policy. With nothing to compare against
-    (no candidates or no prior coverage) it is a no-op that keeps everything.
+    An empty archive is a no-op. Confirmation runs only when retrieval suggests
+    matches, and keeps ambiguous/adjacent pairs. Model or schema errors propagate.
     """
     if not candidates or not covered:
         return list(candidates), []
-    prompt = render_prompt(prompt_path, candidates, covered)
-    dup_idx = parse_duplicate_indices(judge(prompt), len(candidates))
-    kept: list[str] = []
-    dropped: list[Duplicate] = []
-    for i, cand in enumerate(candidates, 1):
-        (dropped.append(Duplicate(cand, dup_idx[i])) if i in dup_idx else kept.append(cand))
-    return kept, dropped
+    matches = parse_duplicate_indices(
+        judge(render_prompt(prompt_path, candidates, covered)), len(candidates), covered
+    )
+    if not matches:
+        return list(candidates), []
+    pairs = [{"n": n, "proposal": candidates[n - 1], "covered": match}
+             for n, match in sorted(matches.items())]
+    prompt = prompt_path.with_name("dedup_confirm.md").read_text().replace(
+        "{{pairs}}", json.dumps(pairs, ensure_ascii=False)
+    )
+    decisions = _decisions(judge(prompt), set(matches), "duplicate")
+    dropped = []
+    for n, item in decisions.items():
+        if type(item["duplicate"]) is not bool:
+            raise ValueError("duplicate must be a boolean")
+        if item["duplicate"]:
+            dropped.append(Duplicate(candidates[n - 1], f"{matches[n]} — {item['reason'].strip()}"))
+    dropped.sort(key=lambda d: candidates.index(d.candidate))
+    rejected = {d.candidate for d in dropped}
+    return [c for c in candidates if c not in rejected], dropped

@@ -9,8 +9,8 @@ Screening runs in two layers, because the failure that shipped a duplicate episo
 slipped past a lexical-only check:
   1. lexical — `db.find_duplicate_topic` catches exact / casing / punctuation re-adds.
   2. semantic — `dedup.filter_new` catches the same idea worded differently.
-Malformed judge output falls back to lexical screening. Provider, authorization,
-and spending errors stop generation; they must not silently bypass screening.
+Incomplete or malformed screening stops generation, as do provider, authorization,
+and spending errors. Unscreened proposals must not enter the queue.
 """
 from __future__ import annotations
 
@@ -141,12 +141,8 @@ def generate(count: int = 3, model: str | None = None, *, use_sources: bool = Tr
         kept, dropped = dedup.filter_new(
             candidates, coverage, judge=judge, prompt_path=p.prompts / "dedup.md"
         )
-    except ValueError:
-        print(
-            "[autogen] semantic dedup unavailable; keeping lexically-clean topics",
-            file=sys.stderr,
-        )
-        kept, dropped = candidates, []
+    except ValueError as exc:
+        raise llm.LLMError("Incomplete duplicate screening; no proposals queued.") from exc
     for d in dropped:
         print(f"[autogen] skipped (semantic dup of {d.matches!r}): {d.candidate}", file=sys.stderr)
 
