@@ -69,16 +69,19 @@ def _decisions(text: str, expected: set[int], field: str) -> dict[int, dict]:
     return result
 
 
-def parse_duplicate_indices(text: str, n: int, covered: list[str]) -> dict[int, str]:
-    """Require complete decisions and resolve matches only to supplied coverage."""
+def parse_duplicate_indices(text: str, n: int, covered: list[str]) -> dict[int, list[str]]:
+    """Resolve up to three possible matches per proposal to actual coverage."""
     result = {}
-    for idx, item in _decisions(text, set(range(1, n + 1)), "duplicate_of").items():
-        match = item["duplicate_of"]
-        if match is None:
-            continue
-        if type(match) is not int or not 1 <= match <= len(covered):
+    for idx, item in _decisions(text, set(range(1, n + 1)), "matches").items():
+        matches = item["matches"]
+        if not isinstance(matches, list) or len(matches) > 3:
+            raise ValueError("expected at most three coverage numbers")
+        if any(type(m) is not int or not 1 <= m <= len(covered) for m in matches):
             raise ValueError("invalid coverage number")
-        result[idx] = covered[match - 1]
+        if len(set(matches)) != len(matches):
+            raise ValueError("repeated coverage number")
+        if matches:
+            result[idx] = [covered[m - 1] for m in matches]
     return result
 
 
@@ -98,18 +101,21 @@ def filter_new(
     )
     if not matches:
         return list(candidates), []
-    pairs = [{"n": n, "proposal": candidates[n - 1], "covered": match}
-             for n, match in sorted(matches.items())]
+    # Keep the pair-to-proposal mapping outside model output. A weak first match
+    # must not hide a real duplicate appearing later in the shortlist.
+    references = [(n, match) for n, options in sorted(matches.items()) for match in options]
+    pairs = [{"n": i, "proposal": candidates[n - 1], "covered": match}
+             for i, (n, match) in enumerate(references, 1)]
     prompt = prompt_path.with_name("dedup_confirm.md").read_text().replace(
         "{{pairs}}", json.dumps(pairs, ensure_ascii=False)
     )
-    decisions = _decisions(judge(prompt), set(matches), "duplicate")
-    dropped = []
-    for n, item in decisions.items():
+    decisions = _decisions(judge(prompt), set(range(1, len(pairs) + 1)), "duplicate")
+    confirmed = {}
+    for pair_id, item in sorted(decisions.items()):
         if type(item["duplicate"]) is not bool:
             raise ValueError("duplicate must be a boolean")
         if item["duplicate"]:
-            dropped.append(Duplicate(candidates[n - 1], f"{matches[n]} — {item['reason'].strip()}"))
-    dropped.sort(key=lambda d: candidates.index(d.candidate))
-    rejected = {d.candidate for d in dropped}
-    return [c for c in candidates if c not in rejected], dropped
+            n, match = references[pair_id - 1]
+            confirmed.setdefault(n, Duplicate(candidates[n - 1], f"{match} — {item['reason'].strip()}"))
+    return ([c for i, c in enumerate(candidates, 1) if i not in confirmed],
+            [confirmed[i] for i in sorted(confirmed)])

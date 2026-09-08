@@ -4,7 +4,7 @@ For EACH proposal, find the closest covered entry and compare the question, cent
 
 Two studies can both expose limits of the same tool while identifying different failure mechanisms. A broad takeaway such as "interpretability is incomplete", "evaluation can fail", or "AI has limits" is not a shared episode thesis. Require the same specific finding or causal mechanism, not just the same research field. When the closest entry describes a different mechanism and no shared study/result is identifiable, keep the proposal.
 
-Only the numbered coverage entries count as prior coverage. For every proposal, return one decision, including proposals that are new. Check the entire list; do not stop after finding one repeat. Use an actual coverage number for a duplicate, otherwise null. Give a short reason naming the shared evidence/payoff or distinct mechanism. Never repeat a JSON key within an object.
+Only the numbered coverage entries count as prior coverage. For every proposal, return one decision, including proposals that are new. Check the entire list; do not stop after finding one repeat. Return up to three numbered coverage entries that could repeat each proposal, strongest matches first; otherwise an empty array. Include alternative plausible matches so confirmation can distinguish a merely related entry from the actual repeated story. Do not include more than three. Give a short reason naming the shared evidence/payoff or distinct mechanism. Never repeat a JSON key within an object.
 
 ## Coverage
 {{covered}}
@@ -12,5 +12,5 @@ Only the numbered coverage entries count as prior coverage. For every proposal, 
 ## Proposals
 {{candidates}}
 
-Return JSON only: {"decisions":[{"n":1,"duplicate_of":null,"reason":"Distinct mechanism"}]}
+Return JSON only: {"decisions":[{"n":1,"matches":[],"reason":"Distinct mechanism"}]}
 There must be exactly one decision for each proposal number.

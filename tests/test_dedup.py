@@ -30,9 +30,9 @@ def _semantic_dedup_tests() -> None:
     candidates = ["SQLite documents", "SQLite concurrency", "A fresh story"]
     covered = ["SQLite application format", "Why reasoning has a wasted tail"]
     search = {"decisions": [
-        {"n": 1, "duplicate_of": 1, "reason": "Same document mechanism"},
-        {"n": 2, "duplicate_of": 1, "reason": "Possibly related"},
-        {"n": 3, "duplicate_of": None, "reason": "Distinct"},
+        {"n": 1, "matches": [1], "reason": "Same document mechanism"},
+        {"n": 2, "matches": [1], "reason": "Possibly related"},
+        {"n": 3, "matches": [], "reason": "Distinct"},
     ]}
     calls = []
     def judge(prompt):
@@ -56,7 +56,7 @@ def _semantic_dedup_tests() -> None:
     assert dedup.filter_new(candidates, [], judge=never, prompt_path=prompt_path) == (candidates, [])
     assert dedup.filter_new([], covered, judge=never, prompt_path=prompt_path) == ([], [])
     new = json.dumps({"decisions": [
-        {"n": n, "duplicate_of": None, "reason": "Distinct"} for n in range(1, 4)
+        {"n": n, "matches": [], "reason": "Distinct"} for n in range(1, 4)
     ]})
     calls.clear()
     def all_new(prompt):
@@ -64,13 +64,14 @@ def _semantic_dedup_tests() -> None:
         return new
     assert dedup.filter_new(candidates, covered, judge=all_new, prompt_path=prompt_path) == (candidates, [])
     assert len(calls) == 1
-    assert dedup.parse_duplicate_indices("```json\n" + json.dumps(search) + "\n```", 3, covered) == {1: covered[0], 2: covered[0]}
+    assert dedup.parse_duplicate_indices("```json\n" + json.dumps(search) + "\n```", 3, covered) == {1: [covered[0]], 2: [covered[0]]}
 
     malformed = ["not json", "{}", '{"decisions": []}', '{"duplicates": []}',
-                 '{"decisions": [{"n":1,"n":2,"duplicate_of":1,"reason":"x"}]}']
+                 '{"decisions": [{"n":1,"n":2,"matches":[1],"reason":"x"}]}']
     for field, value in [("n", True), ("n", 1.5), ("n", "1"), ("n", 4),
-                         ("duplicate_of", True), ("duplicate_of", 3),
-                         ("duplicate_of", "1"), ("reason", ""), ("reason", None)]:
+                         ("matches", True), ("matches", [3]),
+                         ("matches", ["1"]), ("matches", [True]),
+                         ("matches", [1, 1]), ("matches", [1, 2, 1, 2]), ("reason", ""), ("reason", None)]:
         data = json.loads(json.dumps(search))
         data["decisions"][0][field] = value
         malformed.append(json.dumps(data))
@@ -82,6 +83,18 @@ def _semantic_dedup_tests() -> None:
             pass
         else:
             raise AssertionError(f"Accepted incomplete/invalid decision: {text}")
+
+    # A related first result cannot hide a true match later in the shortlist.
+    shortlist = json.dumps({"decisions": [
+        {"n": 1, "matches": [1, 2], "reason": "Possible matches"},
+    ]})
+    confirmation = json.dumps({"decisions": [
+        {"n": 1, "duplicate": False, "reason": "Different mechanism"},
+        {"n": 2, "duplicate": True, "reason": "Same evidence and payoff"},
+    ]})
+    responses = iter([shortlist, confirmation])
+    kept, dropped = dedup.filter_new(["Repeated story"], covered, judge=lambda _: next(responses), prompt_path=prompt_path)
+    assert kept == [] and covered[1] in dropped[0].matches
 
     for confirmation in ['{"decisions": []}', json.dumps({"decisions": [
         {"n": 1, "duplicate": "false", "reason": "Distinct"},
@@ -104,13 +117,13 @@ def _incomplete_screening_does_not_queue() -> None:
             d = _fresh_db(tmp)
             d.add_topic("An earlier topic")
             p = paths()
-            p.prompts.mkdir(parents=True, exist_ok=True)
+            (p.root / "prompts").mkdir(parents=True, exist_ok=True)
             source = Path(__file__).resolve().parent.parent / "prompts"
             for name in ("autogen.md", "dedup.md", "dedup_confirm.md"):
                 (p.prompts / name).write_text((source / name).read_text())
             responses = ["New proposal", "{}"] if bad_stage == "search" else [
                 "New proposal",
-                '{"decisions":[{"n":1,"duplicate_of":1,"reason":"Related"}]}', "{}"
+                '{"decisions":[{"n":1,"matches":[1],"reason":"Related"}]}', "{}"
             ]
             with patch.object(llm, "run_text", side_effect=responses):
                 try:
