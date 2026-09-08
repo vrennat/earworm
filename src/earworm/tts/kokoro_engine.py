@@ -18,7 +18,9 @@ _PARA_BREAK = re.compile(r"\n+")
 
 from ..lexicon import apply_overrides
 from ..normalize import normalize_for_speech
-from .audio import encode_mp3, silence
+from .audio import encode_mp3, mastering_lead_seconds, silence
+from .base import NarrationAudio, NarrationRequest, reject_unknown, speech_text
+from ..transcript import shift_segments
 
 REPO_ID = "hexgrad/Kokoro-82M"
 
@@ -27,11 +29,15 @@ class KokoroEngine:
     def __init__(self, voice_config: dict) -> None:
         k = voice_config.get("kokoro", {})
         a = voice_config.get("audio", {})
+        reject_unknown(k, {"voice", "speed", "lang_code", "blend", "aliases"}, "Kokoro")
+        self.aliases = dict(k.get("aliases", {}))
         self.voice = k.get("voice", "af_heart")
         self.speed = float(k.get("speed", 1.05))
         self.lang_code = k.get("lang_code", "a")
         self.blend = k.get("blend")  # optional [[name, weight], ...]
         self.sample_rate = int(a.get("sample_rate", 24000))
+        if self.sample_rate != 24000:
+            raise ValueError("Kokoro produces 24000 Hz audio; resample after synthesis")
         self.bitrate = a.get("bitrate", "128k")
         self.gap_ms = int(a.get("gap_ms", 900))
         self.section_gap_ms = int(a.get("section_gap_ms", 1200))
@@ -71,17 +77,22 @@ class KokoroEngine:
             self._resolved_voice = self.voice
         return self._resolved_voice
 
-    def _render(self, text: str) -> tuple[np.ndarray, list[tuple[str, float, float]]]:
+    def render(self, request: NarrationRequest | str) -> NarrationAudio:
+        if isinstance(request, str):
+            request = NarrationRequest(request)
+        if request.direction is not None or request.seed is not None:
+            raise ValueError("Kokoro does not support delivery directions or a generation seed")
+        aliases = {**self.aliases, **request.speech_aliases}
+        NarrationRequest(request.canonical_text, aliases)
         pipeline = self._ensure_pipeline()
         voice = self._voice()
-        prepared = apply_overrides(normalize_for_speech(text))
 
         # Split on `---`/`***` lines into sections, then split sections into
         # paragraphs and synthesize per paragraph. Kokoro re-chunks any paragraph
         # over ~510 phonemes at punctuation boundaries; those intra-paragraph
         # chunk boundaries get the short chunk gap, not the paragraph gap, so a
         # long paragraph never acquires an unnatural mid-paragraph pause.
-        sections = [s for s in _SECTION_BREAK.split(prepared) if s.strip()]
+        sections = [s for s in _SECTION_BREAK.split(request.canonical_text) if s.strip()]
 
         parts: list[np.ndarray] = []
         segments: list[tuple[str, float, float]] = []
@@ -95,8 +106,10 @@ class KokoroEngine:
         for section in sections:
             first_para_in_section = True
             for para in (p for p in _PARA_BREAK.split(section) if p.strip()):
+                prepared = apply_overrides(normalize_for_speech(speech_text(para, aliases)))
                 first_chunk_in_para = True
-                for graphemes, _phonemes, audio in pipeline(para, voice=voice, speed=self.speed):
+                para_start = None
+                for _graphemes, _phonemes, audio in pipeline(prepared, voice=voice, speed=self.speed):
                     if parts:
                         if first_chunk_in_para:
                             add_gap(self.section_gap_ms if first_para_in_section else self.gap_ms)
@@ -104,14 +117,30 @@ class KokoroEngine:
                             add_gap(self.chunk_gap_ms)
                     first_chunk_in_para = False
                     a = np.asarray(audio, dtype=np.float32)
-                    start = cursor
+                    if a.ndim != 1 or not a.size or not np.isfinite(a).all():
+                        raise RuntimeError("Kokoro produced invalid or empty paragraph audio")
+                    if para_start is None:
+                        para_start = cursor
                     parts.append(a)
                     cursor += len(a) / self.sample_rate
-                    segments.append((graphemes, start, cursor))
+                if para_start is not None:
+                    # Engine graphemes can contain aliases and normalization;
+                    # retain the canonical paragraph across its internal chunks.
+                    segments.append((para.strip(), para_start, cursor))
+                else:
+                    raise RuntimeError("Kokoro produced no audio for a paragraph")
                 first_para_in_section = False
         if not parts:
             raise RuntimeError("Kokoro produced no audio (empty script?)")
-        return np.concatenate(parts), segments
+        return NarrationAudio(np.concatenate(parts), self.sample_rate, segments, self.name, {
+            "model": REPO_ID, "voice": self.voice, "speed": self.speed,
+            "language": self.lang_code, "blend": self.blend, "speech_aliases": aliases,
+        })
+
+    def _render(self, text: str) -> tuple[np.ndarray, list[tuple[str, float, float]]]:
+        """Compatibility for existing local audition scripts; times are raw PCM."""
+        result = self.render(text)
+        return result.pcm, result.segments
 
     def synthesize(self, text: str) -> bytes:
         full, _ = self._render(text)
@@ -120,4 +149,5 @@ class KokoroEngine:
     def synthesize_with_segments(self, text: str) -> tuple[bytes, list[tuple[str, float, float]]]:
         """Return (mp3 bytes, per-segment (text, start, end)) for transcript building."""
         full, segments = self._render(text)
+        segments = shift_segments(segments, mastering_lead_seconds(self.mastering))
         return encode_mp3(full, self.sample_rate, self.bitrate, mastering=self.mastering), segments

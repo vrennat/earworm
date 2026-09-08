@@ -13,7 +13,7 @@ topics against what the show has already covered (titles + one-line theses) and
 returns the ones that are the same episode in disguise.
 
 The module is pure and backend-agnostic: it renders the prompt and delegates the
-model call to a `judge` callable the caller supplies (autogen wires in `claude`,
+model call to a `judge` callable the caller supplies (autogen wires in the configured API/local route,
 tests wire in a canned function). The caller owns the fail-open policy.
 """
 from __future__ import annotations

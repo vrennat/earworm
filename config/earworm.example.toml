@@ -1,7 +1,7 @@
 # =============================================================================
 # Earworm — consolidated configuration reference
 # =============================================================================
-# This is a single annotated view of EVERY setting Earworm reads, for reference.
+# Common settings reference. See llm.example.toml and voice.example.toml for complete runner and narration controls.
 #
 # At runtime the pipeline reads these as SEPARATE files in config/ (copy each
 # *.example.toml to its real name):
@@ -13,38 +13,24 @@
 #   config/feed.toml     <- feed.example.toml        (only if publishing)
 #   config/secrets.toml  <- secrets.example.toml     (only if publishing)
 #
-# Secrets and the ANTHROPIC_API_KEY live outside this file — see .env.example.
+# Provider credentials stay in Pi or provider environment variables; never put them here.
 # =============================================================================
 
 
-# ----- [pipeline.toml] Generation: per-stage model / retry / toggles ----------
-# Five Claude Code passes per topic: research -> review -> script ->
-# script_review -> revise. All optional; omitting pipeline.toml runs every pass on
-# the claude default model with one retry. `earworm run --model <m>` overrides the
-# primary model for all stages at once. See pipeline.example.toml for full notes.
-[pipeline]
-default_model   = "sonnet"   # primary model for stages without their own `model`
-default_retries = 1          # extra attempts (beyond the first) per stage
-
+# ----- [pipeline.toml] Stage timing and optional reviews --------------------
+# Configure API/local routes, bounds, and fallback in llm.example.toml.
 [pipeline.research]
-model          = "opus"      # research drives web search; worth the spend
-timeout        = 1800
-retries        = 2
-fallback_model = "sonnet"    # finish on sonnet if opus keeps failing
+timeout = 1800
 
 [pipeline.review]
-enabled = true               # adversarial report review; false -> skip it
+enabled = true
 
 [pipeline.script_review]
-enabled = true               # script-review + revise loop; false skips BOTH
-
-[pipeline.autogen]
-model   = "haiku"            # the `earworm autogen` topic proposer
-
+enabled = true
 
 # ----- [voice.toml] Voice / TTS -----------------------------------------------
 [voice]
-engine = "kokoro"            # local neural TTS, the only engine in v1
+engine = "kokoro"            # local neural TTS, default; optional voicebox adapter has separate settings
 
 [voice.kokoro]
 voice = "af_heart"           # narrator; 54 voices available (see README)

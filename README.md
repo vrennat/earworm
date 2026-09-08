@@ -5,8 +5,8 @@
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 
 Give it a topic; get back a narrated podcast episode. Earworm researches the topic
-with the Claude CLI, runs the findings through an adversarial review, rewrites them
-into a script written *for the ear*, narrates it with a local neural voice (Kokoro),
+through explicit API/local models in Pi, checks the evidence, commissions an episode,
+and writes a script *for the ear*, narrates it with a local neural voice (Kokoro),
 masters the audio to broadcast loudness, and tags a ready-to-play mp3. Optionally it
 publishes to a private podcast feed you can subscribe to on your phone. Generation
 (LLM, occasionally slow) is fully decoupled from rendering (local, fast, deterministic) —
@@ -15,8 +15,8 @@ they only ever communicate through a folder of script files.
 ## Install
 
 Earworm needs **Python 3.11+**, [`ffmpeg`](https://ffmpeg.org/), and — for the research
-and scripting passes — the authenticated [`claude`](https://docs.claude.com/en/docs/claude-code/overview)
-CLI on your `PATH`. Narration is fully local; no API key needed for the voice.
+and scripting passes — Pi with configured API credentials or a local model. OpenRouter
+calls use the configured dispatch guard. Narration is local; no API key is needed for Kokoro.
 
 **From PyPI:**
 
@@ -42,6 +42,8 @@ and degrades gracefully without it.
 ```sh
 earworm init                   # scaffold prompts/ + config templates + queue db here
 cp config/show.example.toml config/show.toml     # set your podcast title/author (optional)
+cp config/llm.example.toml config/llm.toml        # configure Pi paths, models, and spend caps
+cp config/pipeline.example.toml config/pipeline.toml
 
 earworm add "What is the current state of small language models, and why does it matter?"
 earworm run                    # research -> review -> script  (writes inbox/scripts/<id>.md)
@@ -68,9 +70,11 @@ earworm download-models      pre-fetch the Kokoro model + voices (warm the cache
 earworm publish              retry upload + register for any unpublished episodes
 ```
 
-`run` accepts `--model` to force one model across every stage (e.g. `--model sonnet`).
-For finer control — a different model per pass, retries, fallback, or skipping a
-quality pass — use `config/pipeline.toml` (see [Pipeline configuration](#pipeline-configuration)).
+`run --model <provider-model-id>` overrides the model on each stage's configured provider.
+Use `config/llm.toml` for routes and budgets, and `config/pipeline.toml` for timing and
+review toggles. To listen privately, run with `--no-stage`, then export with
+`earworm render runs/<run-id>/script.md --output-dir previews/<run-id>`. This path never
+enters the watched inbox, moves the script, updates the episode ledger, or publishes.
 
 ### Ingesting pre-written scripts
 
@@ -81,19 +85,19 @@ path: it takes ready prose and stages it straight into `inbox/scripts/`, where t
 
 ```sh
 earworm ingest essay.md                          # a local markdown/text file
-earworm ingest https://example.com/some-essay    # fetch + extract the article (Claude)
+earworm ingest https://example.com/some-essay    # fetch + extract the article through the configured API
 pbpaste | earworm ingest -                        # stdin
 earworm ingest essay.md --title "My Title" --date 2026-06-14
 earworm ingest essay.md --author "Dario Amodei" --feed dario-amodei  # route to a separate feed
 ```
 
-By default a light Claude pass adapts the text **for the ear**: it strips reading-only
+By default a light API/local pass adapts the text **for the ear**: it strips reading-only
 artifacts (markdown, footnote markers, "see the figure below", inline links), spells
 out numbers, and adds pronunciation hints — without summarizing or rewriting the
 author's argument. Pass `--raw` to skip that pass and read the text verbatim (markdown
 is still stripped deterministically). If the adapt pass looks like it condensed a long
-essay, `ingest` warns you and suggests `--raw`. The model/retry knobs reuse
-`[pipeline.ingest]` and `[pipeline.ingest_fetch]` in `config/pipeline.toml`.
+essay, `ingest` warns you and suggests `--raw`. Configure `ingest` and `ingest_fetch`
+routes in `config/llm.toml`; optional timeouts live in `config/pipeline.toml`.
 
 `--feed <name>` routes the episode to a separate named RSS feed instead of the main one
 (see [Multiple feeds](#multiple-feeds) below) — handy for curated content like a guest
@@ -106,7 +110,7 @@ the consumer is a dumb, deterministic renderer. Either can run, crash, or be res
 independently.
 
 ```
-                 PRODUCE (Claude CLI, slow)                CONSUME (local, fast, no LLM)
+                 PRODUCE (Pi, API/local)                CONSUME (local, fast, no LLM)
   earworm add ─┐
                ├─► [ queue: earworm.db ] ─► earworm run                earworm watch (polls inbox/)
   earworm      │      topics, episodes        │                              │
@@ -122,8 +126,8 @@ independently.
                                                           with Cloudflare Worker ─► RSS feed ─► phone
 ```
 
-- **Queue:** local SQLite (`earworm.db`), tables `topics` and `episodes`. The runner is
-  offline-capable; the local queue is its source of truth.
+- **Queue:** local SQLite (`earworm.db`), tables `topics` and `episodes`. The queue
+  remains available when a provider is offline; generation records its failure there.
 - **Prompts** (`prompts/*.md`) are the product. The research → review → script →
   script-review → revise chain is five LLM passes; tune the prompts constantly.
 - **Idempotency:** the renderer keys each episode on a hash of the script body, so
@@ -133,49 +137,56 @@ independently.
 
 ## Backends
 
-**Research + scripting** run through the Claude CLI — `claude -p` headless with a tool
-allowlist, web search in the research pass. Earworm is coupled to Claude Code by design:
-the agentic web-research-and-write loop is the whole quality story, so there is no
-pluggable LLM backend. `claude.py` is the thin CLI wrapper; `pipeline.py` declares the
-five passes and the executor (per-stage model, retry, fallback); `runner.py` orchestrates.
-Authenticate with `claude login` or `ANTHROPIC_API_KEY`.
+**Research + scripting** use `llm.py`, which starts an isolated Pi process with an explicit
+provider/model, bounded web tools, shared deadlines, and a run cost ledger. Coding tools,
+interactive skills, automatic compaction, and hidden provider retries are disabled.
+OpenRouter dispatch goes through the configured Manabase guard. A single configured
+alternate route is allowed after a transport failure; authentication, credit, budget,
+and output-limit failures stop. No Claude executable, login, or account is used.
 
-**Narration (TTS)** is [Kokoro](https://github.com/hexgrad/kokoro) — a local neural voice
-model (Apache-2.0, weights included). 54 voices, runs on-device, no API key, free.
-Selected by `engine` in
-`config/voice.toml`; the engine is loaded behind a small interface
-(`src/earworm/tts/base.py`) so another backend can be dropped in later.
+Research gathers evidence; its review also commissions the episode. The writer and both
+editing passes receive the full report, corrected review, and bounded excerpts from
+recent episodes, including their middles and endings. There is no outline rotation.
+Resume records check input and artifact hashes before reusing research or review.
+They include the stage's effective route and backend code; changing only the writer's
+allowance does not invalidate completed research. Research retries reuse retained sources.
+Retrieval preserves table headers, caches full extracted sources, and has a total text
+allowance. The final permitted request writes the artifact with tools disabled.
+
+URL ingestion uses the complete cached extraction as its source, rather than a model's
+restatement of the article. Missing or incomplete extraction stops before adaptation.
+
+**Narration** defaults to local [Kokoro](https://github.com/hexgrad/kokoro). The optional
+Voicebox adapter supports the first Qwen CustomVoice audition. Clean transcript text,
+speech aliases, and delivery settings are separate. Unsupported controls fail explicitly.
+Canonical caption times include the mastering lead pad once.
 
 ## Cost per episode
 
-Honest caveat: these are **rough, unmeasured order-of-magnitude estimates**, not a
-benchmark. Real cost depends on the model, topic depth, and how much the research pass
-fetches. Measure your own before trusting a number.
+Every model attempt records its requested route, tokens, response IDs, timing, outcome,
+and cost in the run's `usage.jsonl`. OpenRouter charges are reconciled by response ID.
+Unknown charges remain unknown and retain a conservative budget reservation. The guard's
+canaries are also bounded and reserved. Do not confuse catalog estimates with billed cost.
 
-- **Narration (Kokoro):** $0. Runs locally on CPU/GPU.
-- **Research + scripting (Claude CLI):**
-  - On a **Claude Pro/Max subscription**: ~$0 marginal — the five passes count against
-    your subscription usage limits, not a per-call bill.
-  - On a **pay-as-you-go API key**: the five passes (research with web search is the
-    heaviest) are the cost driver. Ballpark **a few cents to ~$1 per episode** with
-    Sonnet; more with Opus, less with Haiku. Treat this as a starting guess, not a quote.
-- **Publishing (Cloudflare R2 + Worker), if enabled:** effectively $0 at personal volume
-  (well within free tiers).
+Set both `stage_budget_usd` and `run_budget_usd` in `llm.toml`. OpenRouter price ceilings
+are dollars per million tokens. Local inference has no API charge, but local compute,
+GPU contention, and electricity are separate costs. Narration records its own elapsed time.
 
 ## Configuration
 
-Every setting is documented in one place in **`config/earworm.example.toml`**. At runtime
-the pipeline reads these as separate files — copy each `*.example.toml` to its real name:
+Copy the relevant `*.example.toml` templates to their runtime names. The model route
+and narration templates document their supported controls:
 
 | File                  | Required?            | Purpose                                            |
 | --------------------- | -------------------- | -------------------------------------------------- |
-| `config/pipeline.toml`| optional             | Per-stage model, retries, fallback, stage toggles  |
+| `config/pipeline.toml`| optional             | Stage timing, optional model overrides, review toggles |
+| `config/llm.toml` | for generation | Pi paths, API/local routes, tools, fallback, spending caps |
 | `config/voice.toml`   | for rendering        | TTS engine, voice/blend, audio + mastering chain   |
 | `config/show.toml`    | for rendering        | Podcast title/author/description/cover (ID3 + RSS) |
 | `config/lexicon.toml` | optional (recommended) | Pronunciation overrides (IPA) for proper nouns   |
 | `config/feed.toml`    | only if publishing   | Cloudflare account, R2 bucket, Worker URL          |
 | `config/secrets.toml` | only if publishing   | API token + feed secrets (or use env vars)         |
-| `.env`                | optional             | `ANTHROPIC_API_KEY` and other secrets via env      |
+| `.env`                | optional             | Provider keys and publishing secrets via env      |
 | `interests.md`        | only for `autogen`   | Free-form interests that steer auto-topic proposals |
 
 **Voices.** 54 Kokoro voices download on first use. Set `voice` (and a matching
@@ -191,21 +202,18 @@ The shipped example covers common AI/tech/networking terms — extend it for you
 
 ### Pipeline configuration
 
-Each topic runs five Claude Code passes: `research → review → script → script_review →
-revise`. With no `config/pipeline.toml` they all run on the `claude` CLI's default model
-with one retry. Copy `config/pipeline.example.toml` to tune per stage:
+Each topic runs `research → review → script → script_review → revise`. The order reflects
+artifact dependencies; it does not dictate the episode's spoken structure.
 
-- **Per-stage model** — spend where it matters. `[pipeline.research] model = "opus"` for
-  the web-research pass, cheaper models elsewhere. `earworm run --model <m>` still forces
-  one model across every stage when you want a blunt override.
-- **Retry + fallback** — `retries` adds attempts on the primary model; `fallback_model`
-  makes one final attempt on a different model after the primary budget is exhausted
-  (independent of `retries`, so it fires even at `retries = 0`).
-- **Toggle quality passes** — `[pipeline.review] enabled = false` writes the script
-  straight from the report; `[pipeline.script_review] enabled = false` skips the
-  script-review *and* revise loop (revise exists only to fold the review back in). The
-  three load-bearing passes (research, script, and revise-when-reviewing) can't be toggled,
-  and stages can't be reordered — the order is a data dependency, not a preference.
+- Configure providers, model IDs, thinking, token limits, price ceilings, stage/run budgets,
+  and optional transport fallback in `config/llm.toml` under `[llm.stages.<stage>]`.
+- Configure timeouts and review toggles in `config/pipeline.toml`. Disabling research review
+  lets the writer derive a brief from the report. Disabling script review also skips revision.
+- Old `default_retries`, nonzero `retries`, and `fallback_model` settings in pipeline.toml
+  require migration to the backend configuration. This prevents nested retry multiplication.
+- Legacy Sonnet/Haiku/Opus aliases are not API model IDs. Copy the new templates and select
+  explicit routes. The current example tests DeepSeek research and Gemini editorial passes;
+  model assignments remain a quality decision, not a claim that cheaper output is adequate.
 
 ## Publishing — a private podcast feed (optional)
 
@@ -306,18 +314,10 @@ docker run --rm -v "$PWD":/data earworm watch        # render scripts as they ap
 docker run --rm -v "$PWD":/data earworm render inbox/scripts/<id>.md   # one-shot
 ```
 
-Earworm's two halves share only a folder, so the natural split is **generate on the host,
-render in the container** — they meet at `inbox/scripts/`. Generation (`earworm run`) needs
-the authenticated `claude` CLI, which isn't in the image. To also generate in-container,
-install the CLI and pass a key:
-
-```sh
-docker run --rm -v "$PWD":/data -e ANTHROPIC_API_KEY=sk-... earworm run
-```
-
-(That still requires the `claude` CLI on `PATH` inside the image — add it to the Dockerfile
-with a Node layer if you want a single do-everything container. The default image keeps
-generation on the host.)
+The normal split is generation on the host with Pi and rendering in the container;
+they meet at `inbox/scripts/`. The renderer image does not install Pi or the required
+OpenRouter dispatch guard. Configure those explicitly if you build a combined image;
+never copy a personal interactive agent environment into the image.
 
 The model is downloaded at **build** time (`earworm download-models` runs in the build and
 smoke-tests a synth), so first render is instant and a broken stack fails the build, not you.
@@ -336,7 +336,7 @@ smoke-tests a synth), so first render is instant and a broken stack fails the bu
 ```
 prompts/        the five LLM prompts — the heart of it (bundled into the wheel too)
 config/         *.example.toml templates (copy to real names; reals are gitignored)
-src/earworm/    cli, db, pipeline (stages + executor), runner, claude, render (TTS), normalize, tts/
+src/earworm/    cli, db, pipeline (stages + executor), runner, llm, render (TTS), normalize, tts/
 scripts/        cover generator, voice sampler, regen/render/rerender helpers
 launchd/        macOS agents: watch daemon + weekday run + Monday autogen
 worker/         Cloudflare Worker (TypeScript, bun) — token-gated RSS feed over D1 + R2

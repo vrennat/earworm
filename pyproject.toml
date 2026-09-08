@@ -4,12 +4,12 @@
 # `earworm-pod` because `earworm` was already taken on PyPI by an unrelated project.
 name = "earworm-pod"
 version = "0.1.0"
-description = "Give it a topic, get back a narrated podcast episode — researched by Claude, voiced by a local Kokoro model."
+description = "Give it a topic, get back a narrated podcast episode with API research and local speech."
 readme = "README.md"
 requires-python = ">=3.11"
 license = { file = "LICENSE" }
 authors = [{ name = "Tanner Vass" }]
-keywords = ["podcast", "tts", "text-to-speech", "kokoro", "claude", "rss", "ai", "research"]
+keywords = ["podcast", "tts", "text-to-speech", "kokoro", "rss", "ai", "research"]
 classifiers = [
     "Development Status :: 4 - Beta",
     "Environment :: Console",
@@ -56,6 +56,7 @@ exclude = [
     "earworm/_assets/config/show.toml",
     "earworm/_assets/config/lexicon.toml",
     "earworm/_assets/config/pipeline.toml",
+    "earworm/_assets/config/llm.toml",
     "earworm/_assets/config/feed.toml",
     "earworm/_assets/config/secrets.toml",
     "earworm/_assets/config/earworm.toml",
@@ -66,4 +67,11 @@ exclude = [
 # (which only ships src/earworm) can still run and `earworm init` can scaffold them.
 [tool.hatch.build.targets.wheel.force-include]
 "prompts" = "earworm/_assets/prompts"
-"config" = "earworm/_assets/config"
+"config/earworm.example.toml" = "earworm/_assets/config/earworm.example.toml"
+"config/feed.example.toml" = "earworm/_assets/config/feed.example.toml"
+"config/lexicon.example.toml" = "earworm/_assets/config/lexicon.example.toml"
+"config/llm.example.toml" = "earworm/_assets/config/llm.example.toml"
+"config/pipeline.example.toml" = "earworm/_assets/config/pipeline.example.toml"
+"config/secrets.example.toml" = "earworm/_assets/config/secrets.example.toml"
+"config/show.example.toml" = "earworm/_assets/config/show.example.toml"
+"config/voice.example.toml" = "earworm/_assets/config/voice.example.toml"

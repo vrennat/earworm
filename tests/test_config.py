@@ -7,6 +7,7 @@ source/clone checkout uses its local prompts/.
 import os
 import sys
 import tempfile
+import tomllib
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "src"))
@@ -32,6 +33,17 @@ def test_prompts_falls_back_to_bundled_when_absent(tmp: str) -> None:
     p = _home(tmp)  # empty home — no prompts/ dir
     assert not (Path(tmp) / "prompts").exists()
     assert p.prompts == config._ASSETS / "prompts", "must resolve to the packaged prompts"
+
+
+def test_wheel_never_force_includes_runtime_configuration(tmp: str) -> None:
+    root = Path(__file__).resolve().parent.parent
+    project = tomllib.loads((root / "pyproject.toml").read_text())
+    included = project["tool"]["hatch"]["build"]["targets"]["wheel"]["force-include"]
+    for source, destination in included.items():
+        if "/_assets/config" in destination:
+            assert Path(source).name.endswith(".example.toml"), source
+            assert destination.endswith(".example.toml"), destination
+    assert "config/llm.example.toml" in included
 
 
 def main() -> int:

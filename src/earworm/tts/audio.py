@@ -11,6 +11,13 @@ import numpy as np
 import soundfile as sf
 
 
+def mastering_lead_seconds(mastering: dict | None) -> float:
+    """Actual leading delay added by encode_mp3, including millisecond rounding."""
+    if not mastering or not mastering.get("enabled"):
+        return 0.0
+    return max(0, round(float(mastering.get("pad_start_sec", 0) or 0) * 1000)) / 1000
+
+
 def _master_filter(duration_sec: float, sample_rate: int, m: dict) -> str:
     """Build the ffmpeg -af chain from the [mastering] config, in order.
 
@@ -25,7 +32,7 @@ def _master_filter(duration_sec: float, sample_rate: int, m: dict) -> str:
     """
     parts = [m[k] for k in ("compress", "eq", "loudnorm") if m.get(k)]
     fade_out = float(m.get("fade_out_sec", 0) or 0)
-    pad_start = float(m.get("pad_start_sec", 0) or 0)
+    pad_start = mastering_lead_seconds(m)
     pad_end = float(m.get("pad_end_sec", 0) or 0)
     if fade_out > 0 and duration_sec > fade_out:
         parts.append(f"afade=t=out:st={duration_sec - fade_out:.3f}:d={fade_out}")

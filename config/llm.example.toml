@@ -1,0 +1,85 @@
+# Pi is the only runner. API credentials stay in Pi's auth.json or provider env
+# vars. This file contains no credentials. Copy it to config/llm.toml.
+[llm]
+# For an Ollama stage with thinking off, set request_reasoning_effort = "none"
+# explicitly; an omitted OpenAI-compatible field can enable server-side thinking.
+provider = "openrouter"
+model = "deepseek/deepseek-v4-pro-0813"
+thinking = "off"
+pi_bin = "~/.bun/bin/pi"
+agent_dir = "~/.pi/agent"
+openrouter_wrapper = "~/Developer/manabase/scripts/pi-run.sh"
+web_access_path = "~/.pi/agent/npm/node_modules/pi-web-access"
+max_output_tokens = 6000
+max_input_bytes = 160000
+max_requests = 1
+max_tool_calls = 20
+stage_budget_usd = 1.0
+run_budget_usd = 5.0
+# Dollars per million tokens. OpenRouter must honor these routing ceilings.
+max_price_input = 1.35
+max_price_output = 4.0
+# Optional one-time alternate after a transport failure only. It inherits caps.
+# Auth, guard refusal, credit limits, truncation, and malformed output stop.
+fallback_provider = ""
+fallback_model = ""
+
+[llm.stages.research]
+thinking = "off"
+max_requests = 14
+max_tool_calls = 24
+stage_budget_usd = 1.6
+
+[llm.stages.review]
+thinking = "off"
+max_requests = 8
+max_tool_calls = 12
+stage_budget_usd = 1.0
+
+[llm.stages.autogen]
+thinking = "off"
+model = "deepseek/deepseek-v4-flash-0731"
+max_price_input = 0.45
+max_price_output = 1.35
+max_requests = 5
+max_output_tokens = 1800
+stage_budget_usd = 0.25
+
+[llm.stages.ingest_fetch]
+thinking = "off"
+max_requests = 8
+max_tool_calls = 12
+stage_budget_usd = 1.0
+
+[llm.stages.script]
+thinking = "medium"
+max_output_tokens = 12000
+provider = "openrouter"
+model = "google/gemini-3.1-pro-preview"
+max_price_input = 2.2
+max_price_output = 13.2
+stage_budget_usd = 0.5
+
+[llm.stages.script_review]
+thinking = "medium"
+provider = "openrouter"
+model = "google/gemini-3.1-pro-preview"
+max_price_input = 2.2
+max_price_output = 13.2
+max_output_tokens = 8000
+stage_budget_usd = 0.4
+
+[llm.stages.revise]
+thinking = "medium"
+max_output_tokens = 12000
+provider = "openrouter"
+model = "google/gemini-3.1-pro-preview"
+max_price_input = 2.2
+max_price_output = 13.2
+stage_budget_usd = 0.5
+
+# Local routes use an explicit model already present in Pi models.json. Set its
+# provider/model and both max_price values to zero; no API charge is assumed.
+# Each call writes a reservation and result to its run ledger. If final provider
+# cost is unavailable, the conservative byte/token upper bound remains charged
+# to the budget. Canary costs remain unknown and retain their enforced bound.

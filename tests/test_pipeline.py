@@ -1,245 +1,159 @@
-"""Standalone tests for earworm.pipeline. Run: uv run python tests/test_pipeline.py
-(or: PYTHONPATH=src python3.11 tests/test_pipeline.py)
-
-No pytest dependency — plain asserts so it runs anywhere the package imports.
-The executor has no heavy deps (no torch/kokoro), so these run fast. The real
-`claude` CLI is never invoked: stage attempts are dependency-injected fakes.
-"""
+"""Artifact handoff tests; no model or network calls. Run with Python directly."""
+import os
 import sys
 import tempfile
 from pathlib import Path
+from unittest.mock import patch
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "src"))
-
-from earworm import claude  # noqa: E402
-from earworm.pipeline import (  # noqa: E402
-    PipelineConfig,
-    RunContext,
-    StageConfig,
-    StageError,
-    active_stages,
-    resolve_model,
-    run_stage,
-    stage_by_name,
-    with_retry,
-)
-
-NOSLEEP = lambda _seconds: None  # noqa: E731 - silence backoff in tests
+from earworm import config, db, pipeline, runner
 
 
-def test_resolve_model_precedence() -> None:
-    # cli flag wins over everything
-    assert resolve_model("haiku", "opus", "sonnet") == "haiku"
-    # no cli -> per-stage model wins over default
-    assert resolve_model(None, "opus", "sonnet") == "opus"
-    # no cli, no stage -> global default
-    assert resolve_model(None, None, "sonnet") == "sonnet"
-    # nothing set -> None (let the claude CLI choose)
-    assert resolve_model(None, None, None) is None
+def context(root):
+    (root / "prompts").mkdir()
+    source = Path(__file__).resolve().parent.parent / "prompts"
+    for p in source.glob("*.md"):
+        (root / "prompts" / p.name).write_text(p.read_text())
+    ctx = pipeline.RunContext(root, root / "prompts", root / "runs", root / "inbox/scripts",
+                              "2026-09-05-0001-test", "a test topic", "2026-09-05", True)
+    ctx.run_dir.mkdir(parents=True)
+    return ctx
 
 
-def test_with_retry_succeeds_first_try() -> None:
-    calls: list = []
-
-    def attempt(model):
-        calls.append(model)
-        return "ok"
-
-    assert with_retry(attempt, model="A", retries=2, fallback_model=None, sleep=NOSLEEP) == "ok"
-    assert calls == ["A"], "success on first try must not retry"
+def script(ctx):
+    return f"---\ntitle: A test\ndate: {ctx.date}\nreport_path: {ctx.report_path}\n---\n\n" + "A complete spoken sentence. " * 40
 
 
-def test_with_retry_exhausts_then_raises() -> None:
-    calls: list = []
-
-    def always_fail(model):
-        calls.append(model)
-        raise claude.ClaudeError("boom")
-
-    raised = False
+def test_toggles_and_model_precedence():
+    cfg = pipeline.PipelineConfig.from_toml({"pipeline": {"review": {"enabled": False}, "script_review": {"enabled": False}}})
+    assert [s.name for s in pipeline.active_stages(cfg)] == ["research", "script"]
+    assert pipeline.resolve_model("override", "stage", "default") == "override"
+    assert pipeline.resolve_model(None, "stage", "default") == "stage"
     try:
-        with_retry(always_fail, model="A", retries=2, fallback_model=None, sleep=NOSLEEP)
-    except claude.ClaudeError:
-        raised = True
-    assert raised, "must re-raise after exhausting retries"
-    assert calls == ["A", "A", "A"], "retries=2 means 3 total primary attempts"
+        pipeline.PipelineConfig.from_toml({"pipeline": {"default_retries": 2}})
+    except ValueError as e:
+        assert "llm.toml" in str(e)
+    else:
+        raise AssertionError("Legacy retry multiplication must require migration")
 
 
-def test_with_retry_falls_back_after_exhaustion() -> None:
-    calls: list = []
-
-    def fail_primary(model):
-        calls.append(model)
-        if model == "A":
-            raise claude.ClaudeError("boom")
-        return "fallback-ok"
-
-    result = with_retry(fail_primary, model="A", retries=2, fallback_model="B", sleep=NOSLEEP)
-    assert result == "fallback-ok"
-    assert calls == ["A", "A", "A", "B"], "fallback is one extra attempt after the primary budget"
-
-
-def test_with_retry_fallback_with_zero_retries() -> None:
-    calls: list = []
-
-    def fail_primary(model):
-        calls.append(model)
-        if model == "A":
-            raise claude.ClaudeError("boom")
-        return "fallback-ok"
-
-    # retries=0 still tries the fallback once: fallback is independent of the budget
-    result = with_retry(fail_primary, model="A", retries=0, fallback_model="B", sleep=NOSLEEP)
-    assert result == "fallback-ok"
-    assert calls == ["A", "B"]
-
-
-def test_pipeline_config_defaults() -> None:
-    pc = PipelineConfig.from_toml({})
-    assert pc.default_model is None
-    assert pc.default_retries == 1
-    sc = pc.for_stage("research")
-    assert sc == StageConfig()  # all-default
-    assert sc.enabled is True
-
-
-def test_pipeline_config_overrides() -> None:
-    pc = PipelineConfig.from_toml(
-        {
-            "pipeline": {
-                "default_model": "sonnet",
-                "default_retries": 2,
-                "research": {
-                    "model": "opus",
-                    "timeout": 1800,
-                    "retries": 3,
-                    "fallback_model": "sonnet",
-                },
-                "review": {"enabled": False},
-            }
-        }
-    )
-    assert pc.default_model == "sonnet"
-    assert pc.default_retries == 2
-    r = pc.for_stage("research")
-    assert r.model == "opus"
-    assert r.timeout == 1800
-    assert r.retries == 3
-    assert r.fallback_model == "sonnet"
-    assert pc.for_stage("review").enabled is False
-    # an unconfigured stage falls back to all-default
-    assert pc.for_stage("script") == StageConfig()
-
-
-def _names(cfg: PipelineConfig) -> list:
-    return [s.name for s in active_stages(cfg)]
-
-
-def test_active_stages_all_on_by_default() -> None:
-    assert _names(PipelineConfig.from_toml({})) == [
-        "research",
-        "review",
-        "script",
-        "script_review",
-        "revise",
-    ]
-
-
-def test_active_stages_review_off() -> None:
-    cfg = PipelineConfig.from_toml({"pipeline": {"review": {"enabled": False}}})
-    assert _names(cfg) == ["research", "script", "script_review", "revise"]
-
-
-def test_active_stages_script_review_off_drops_revise_too() -> None:
-    # the script_review + revise loop toggles as a unit
-    cfg = PipelineConfig.from_toml({"pipeline": {"script_review": {"enabled": False}}})
-    assert _names(cfg) == ["research", "review", "script"]
-
-
-def test_active_stages_both_quality_passes_off() -> None:
-    cfg = PipelineConfig.from_toml(
-        {"pipeline": {"review": {"enabled": False}, "script_review": {"enabled": False}}}
-    )
-    assert _names(cfg) == ["research", "script"]
-
-
-def _ctx(root: Path) -> RunContext:
-    (root / "prompts").mkdir(parents=True, exist_ok=True)
-    (root / "prompts" / "research.md").write_text("topic={{topic}} out={{report_path}}")
-    # every script-stage prompt interpolates the shared voice partial
-    (root / "prompts" / "_voice.md").write_text("VOICE RULES")
-    (root / "runs" / "RID").mkdir(parents=True, exist_ok=True)
-    return RunContext(
-        root=root,
-        prompts=root / "prompts",
-        runs=root / "runs",
-        inbox_scripts=root / "inbox" / "scripts",
-        run_id="RID",
-        topic="cool topic",
-        date="2026-06-09",
-        review_enabled=True,
-    )
-
-
-def test_run_stage_success_writes_expected_file() -> None:
+def test_corrected_evidence_reaches_all_writing_stages():
     with tempfile.TemporaryDirectory() as tmp:
-        ctx = _ctx(Path(tmp))
-        stage = stage_by_name("research")
-        seen: dict = {}
+        ctx = context(Path(tmp))
+        ctx.report_path.write_text("Original report with source anchors")
+        ctx.review_path.write_text("Correction: Node Six differs from Node Ten. Editorial commission follows.")
+        ctx.staged_script.write_text(script(ctx))
+        ctx.script_review_path.write_text("A structural defect")
+        for name in ("script", "script_review", "revise"):
+            stage = pipeline.stage_by_name(name)
+            values = stage.build_vars(ctx)
+            rendered = pipeline.llm.render_prompt(ctx.prompts / stage.prompt_file, **values)
+            assert "Original report with source anchors" in rendered
+            assert "Correction: Node Six differs from Node Ten" in rendered
+            assert not stage.allowed_tools
+        assert pipeline.stage_by_name("script_review").build_vars(ctx)["word_count"] == "160"
+        disabled = pipeline.RunContext(**{**ctx.__dict__, "review_enabled": False})
+        assert pipeline.stage_by_name("script").build_vars(disabled)["review_content"] == ""
 
-        def fake_run(prompt, *, cwd, allowed_tools, expect_file, timeout, model):
-            # a healthy claude run writes the expected file
-            seen["model"] = model
-            seen["prompt"] = prompt
-            Path(expect_file).write_text("# report")
-            return {}
 
-        run_stage(stage, ctx, PipelineConfig.from_toml({}), cli_model=None, _run=fake_run, sleep=NOSLEEP)
-        assert ctx.report_path.exists()
-        assert "cool topic" in seen["prompt"], "prompt vars must be rendered"
-
-
-def test_script_review_vars_include_measured_word_count() -> None:
+def test_resume_requires_matching_inputs_and_unedited_artifact():
     with tempfile.TemporaryDirectory() as tmp:
-        ctx = _ctx(Path(tmp))
-        ctx.staged_script.write_text("---\ntitle: T\n---\n\none two three four five\n")
-        vars_ = stage_by_name("script_review").build_vars(ctx)
-        assert vars_["word_count"] == "5", vars_["word_count"]
+        ctx = context(Path(tmp))
+        stage = pipeline.stage_by_name("research")
+        cfg = pipeline.PipelineConfig()
+        def fake(prompt, **kwargs):
+            kwargs["expect_file"].write_text("A complete report")
+        pipeline.run_stage(stage, ctx, cfg, _run=fake)
+        assert pipeline.can_resume(stage, ctx, cfg)
+        ctx.report_path.write_text("A manually corrected report")
+        assert not pipeline.can_resume(stage, ctx, cfg)
+        pipeline.run_stage(stage, ctx, cfg, _run=fake)
+        (ctx.prompts / "research.md").write_text("Changed commission {{topic}}")
+        assert not pipeline.can_resume(stage, ctx, cfg)
+        assert not pipeline.can_resume(pipeline.stage_by_name("script_review"), ctx, cfg)
 
 
-def test_script_review_never_skips_on_resume() -> None:
-    # the script stage always re-runs on a resumed topic, so a review file left
-    # over from a prior attempt must not short-circuit the pass — it would
-    # describe the previous script and feed the revise stage stale fixes
-    assert stage_by_name("script_review").skip_if_exists is False
-    assert stage_by_name("revise").skip_if_exists is False
-
-
-def test_run_stage_failure_raises_stage_error() -> None:
+def test_research_retry_reuses_retained_sources_with_coverage():
     with tempfile.TemporaryDirectory() as tmp:
-        ctx = _ctx(Path(tmp))
-        stage = stage_by_name("research")
+        ctx = context(Path(tmp))
+        with patch.object(pipeline.llm, "retained_evidence", return_value="Source: https://example.com\nCharacters 0-80 of 160."):
+            stage = pipeline.stage_by_name("research")
+            prompt = pipeline.llm.render_prompt(ctx.prompts / stage.prompt_file, **stage.build_vars(ctx))
+        assert "Reuse this evidence rather than fetching the same pages again" in prompt
+        assert "Source: https://example.com\nCharacters 0-80 of 160." in prompt
 
-        def fake_run(prompt, *, cwd, allowed_tools, expect_file, timeout, model):
-            raise claude.ClaudeError("nope")
 
-        raised = None
+def test_writer_allowance_changes_do_not_invalidate_completed_research():
+    with tempfile.TemporaryDirectory() as tmp:
+        ctx = context(Path(tmp))
+        (ctx.root / "config").mkdir()
+        config_file = ctx.root / "config/llm.toml"
+        config_file.write_text('[llm]\nmodel="research-model"\n[llm.stages.script]\nmax_output_tokens=3000\n')
+        stage = pipeline.stage_by_name("research")
+        cfg = pipeline.PipelineConfig()
+        pipeline.run_stage(stage, ctx, cfg, _run=lambda prompt, **kw: kw["expect_file"].write_text("Report"))
+        config_file.write_text(config_file.read_text().replace('3000', '8000'))
+        assert pipeline.can_resume(stage, ctx, cfg)
+        config_file.write_text(config_file.read_text().replace('research-model', 'another-research-model'))
+        assert not pipeline.can_resume(stage, ctx, cfg)
+
+
+def test_invalid_script_stops_before_handoff_and_empty_review_succeeds():
+    with tempfile.TemporaryDirectory() as tmp:
+        ctx = context(Path(tmp))
+        cfg = pipeline.PipelineConfig()
+        def invalid(prompt, **kwargs):
+            kwargs["expect_file"].write_text("I have written the script.")
         try:
-            run_stage(stage, ctx, PipelineConfig.from_toml({}), cli_model=None, _run=fake_run, sleep=NOSLEEP)
-        except StageError as e:
-            raised = e
-        assert raised is not None, "run_stage must wrap failures in StageError"
-        assert raised.stage == "research"
+            pipeline.run_stage(pipeline.stage_by_name("script"), ctx, cfg, _run=invalid)
+        except pipeline.StageError as e:
+            assert e.stage == "script"
+        else:
+            raise AssertionError("Non-script model response accepted")
+        assert not ctx.script_path.exists()
+        ctx.staged_script.write_text(script(ctx))
+        def clean_review(prompt, **kwargs):
+            kwargs["expect_file"].write_text("")
+        pipeline.run_stage(pipeline.stage_by_name("script_review"), ctx, cfg, _run=clean_review)
+        assert ctx.script_review_path.exists()
+        assert not ctx.script_review_path.read_text()
 
 
-def main() -> int:
-    tests = [v for k, v in sorted(globals().items()) if k.startswith("test_")]
-    for t in tests:
-        t()
-        print(f"  ok  {t.__name__}")
-    print(f"\n{len(tests)} passed")
-    return 0
+def test_private_run_never_enters_watched_inbox_and_failures_stay_failed():
+    with tempfile.TemporaryDirectory() as tmp:
+        root = Path(tmp).resolve()
+        context(root)
+        with patch.dict(os.environ, {"EARWORM_HOME": str(root)}):
+            config.paths.cache_clear()
+            db.init()
+            tid = db.add_topic("Private episode")
+            def fake(stage, ctx, cfg, **kwargs):
+                stage.expect_file(ctx).write_text(script(ctx) if stage.name in {"script", "revise"} else "Evidence")
+            with patch.object(pipeline, "run_stage", fake):
+                result = runner.run_one(tid, stage_for_render=False)
+            assert Path(result["script_path"]).parent.parent == root / "runs"
+            assert not list((root / "inbox/scripts").glob("*.md"))
+            assert db.get_topic(tid)["status"] == "done"
+            fail_id = db.add_topic("Failure episode")
+            def failed(stage, ctx, cfg, **kwargs):
+                if stage.name == "revise":
+                    raise RuntimeError("API rejected this request")
+                fake(stage, ctx, cfg, **kwargs)
+            with patch.object(pipeline, "run_stage", failed):
+                try:
+                    runner.run_one(fail_id)
+                except RuntimeError:
+                    pass
+                else:
+                    raise AssertionError("Failed revision escaped")
+            assert db.get_topic(fail_id)["status"] == "failed"
+            assert not list((root / "inbox/scripts").glob("*.md"))
+        config.paths.cache_clear()
 
 
 if __name__ == "__main__":
-    raise SystemExit(main())
+    tests = [v for k, v in sorted(globals().items()) if k.startswith("test_")]
+    for test in tests:
+        test()
+        print(f"ok {test.__name__}")
+    print(f"{len(tests)} passed")

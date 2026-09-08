@@ -7,7 +7,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "src"))
 
-from earworm.transcript import build_vtt, dedot_acronyms as d  # noqa: E402
+from earworm.transcript import build_vtt, dedot_acronyms as d, shift_segments  # noqa: E402
 
 
 def check(text: str, expected: str) -> None:
@@ -44,6 +44,13 @@ def main() -> int:
     assert "We built an API today" in vtt, vtt
     assert "A.P.I." not in vtt, vtt
     assert "00:00:00.000 --> 00:00:02.500" in vtt, vtt
+    canonical = [("C.E.O's was the original spelling.", 0.0, 2.5)]
+    vtt = build_vtt(shift_segments(canonical, 0.3), canonical=True)
+    assert "C.E.O's was the original spelling." in vtt, vtt
+    assert "00:00:00.300 --> 00:00:02.800" in vtt, vtt
+    assert canonical[0][1] == 0.0
+    vtt = build_vtt([("Crossing a minute.", 59.9996, 60.01)], canonical=True)
+    assert "00:01:00.000 --> 00:01:00.010" in vtt, vtt
     # empty/whitespace segments are dropped
     assert build_vtt([("   ", 0.0, 1.0)]).strip() == "WEBVTT", build_vtt([("   ", 0.0, 1.0)])
 

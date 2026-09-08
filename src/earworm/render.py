@@ -10,6 +10,7 @@ registers the episode with the Worker.
 from __future__ import annotations
 
 import hashlib
+import json
 import shutil
 import time
 from pathlib import Path
@@ -19,6 +20,74 @@ from . import db, feed, shownotes, transcript
 from .config import paths, show_config, voice_config
 from .frontmatter import parse
 from .tts import TTSEngine, get_engine
+
+
+def _synthesize(body: str, engine: TTSEngine, config: dict) -> tuple[bytes, list, dict]:
+    """Keep canonical captions separate from the text a voice engine pronounces."""
+    started = time.monotonic()
+    if hasattr(engine, "render"):
+        from .tts.base import NarrationRequest, reject_unknown
+        from .tts.audio import encode_mp3, mastering_lead_seconds
+
+        delivery = config.get("delivery", {})
+        reject_unknown(delivery, {"direction", "seed"}, "delivery")
+        request = NarrationRequest(
+            canonical_text=body,
+            speech_aliases=config.get("speech_aliases", {}),
+            direction=delivery.get("direction"),
+            seed=delivery.get("seed"),
+        )
+        result = engine.render(request)
+        mp3 = encode_mp3(result.pcm, result.sample_rate,
+                         config.get("audio", {}).get("bitrate", "128k"),
+                         mastering=config.get("mastering"))
+        lead = mastering_lead_seconds(config.get("mastering"))
+        segments = [(text, start + lead, end + lead) for text, start, end in result.segments]
+        provenance = {"canonical_captions": True, "engine": result.engine,
+                      "details": result.provenance, "caption_offset_seconds": lead}
+    elif hasattr(engine, "synthesize_with_segments"):
+        mp3, segments = engine.synthesize_with_segments(body)
+        provenance = {"canonical_captions": False, "engine": engine.name}
+    else:
+        mp3, segments = engine.synthesize(body), []
+        provenance = {"canonical_captions": False, "engine": engine.name}
+    provenance["render_seconds"] = round(time.monotonic() - started, 3)
+    return mp3, segments, provenance
+
+
+def render_preview(script_path: Path, output_dir: Path, engine: Optional[TTSEngine] = None) -> dict:
+    """Export a complete private episode without moving inputs or registering it."""
+    from mutagen.mp3 import MP3
+
+    script_bytes = script_path.read_bytes()
+    meta, body = parse(script_bytes.decode("utf-8"))
+    if not body.strip():
+        raise ValueError("Cannot render an empty script")
+    config = voice_config()
+    engine = engine or get_engine(config)
+    output_dir.mkdir(parents=True, exist_ok=True)
+    audio_path = output_dir / "episode.mp3"
+    mp3, segments, provenance = _synthesize(body, engine, config)
+    audio_path.write_bytes(mp3)
+    duration = MP3(str(audio_path)).info.length
+    summary, sources = shownotes.extract(Path(meta["report_path"]) if meta.get("report_path") else None)
+    _tag(audio_path, title=meta.get("title", script_path.stem), date=meta.get("date", ""),
+         notes=shownotes.format_notes(summary, sources), duration_sec=duration)
+    if segments:
+        (output_dir / "episode.vtt").write_text(transcript.build_vtt(
+            segments, canonical=provenance["canonical_captions"]))
+    else:
+        (output_dir / "episode.vtt").unlink(missing_ok=True)
+    result = {
+        "status": "preview", "title": meta.get("title", script_path.stem),
+        "audio_path": str(audio_path), "script_path": str(script_path),
+        "duration_sec": round(duration, 3), "body_words": len(body.split()),
+        "script_sha256": hashlib.sha256(script_bytes).hexdigest(),
+        "audio_sha256": hashlib.sha256(audio_path.read_bytes()).hexdigest(),
+        "published": False, **provenance,
+    }
+    (output_dir / "render.json").write_text(json.dumps(result, indent=2) + "\n")
+    return result
 
 
 def content_hash(body: str) -> str:
@@ -92,19 +161,18 @@ def render_script_file(
             shutil.move(str(script_path), str(dest))
         return {"status": "skipped_duplicate", "slug": slug, "title": title, "feed": feed_name}
 
+    config = voice_config()
     if engine is None:
-        engine = get_engine(voice_config())
+        engine = get_engine(config)
 
-    if hasattr(engine, "synthesize_with_segments"):
-        mp3_bytes, segments = engine.synthesize_with_segments(body)
-    else:
-        mp3_bytes, segments = engine.synthesize(body), []
+    mp3_bytes, segments, provenance = _synthesize(body, engine, config)
     audio_path.write_bytes(mp3_bytes)
 
     transcript_path: Optional[Path] = None
     if segments:
         transcript_path = p.episodes / f"{slug}.vtt"
-        transcript_path.write_text(transcript.build_vtt(segments))
+        transcript_path.write_text(transcript.build_vtt(segments, canonical=provenance["canonical_captions"]))
+    audio_path.with_suffix(".render.json").write_text(json.dumps(provenance, indent=2) + "\n")
 
     from mutagen.mp3 import MP3
 

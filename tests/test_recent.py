@@ -1,29 +1,19 @@
-"""Standalone tests for earworm.recent (cross-episode memory) and the macro-
-structure rotation. Run: uv run python tests/test_recent.py
-(or: PYTHONPATH=src python3.11 tests/test_recent.py)
+"""Standalone checks for recent-episode context and real prompt handoffs.
 
-No pytest dependency — plain asserts. No LLM and no heavy deps: pure text
-extraction + a couple of prompt-wiring invariants.
+Run: uv run --locked python tests/test_recent.py
+No provider calls, pytest, or audio dependencies are required.
 """
+import os
 import sys
 import tempfile
-import time
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "src"))
 
-from earworm import claude, recent  # noqa: E402
-from earworm.pipeline import (  # noqa: E402
-    MACRO_STRUCTURES,
-    STAGES,
-    VOICE_PARTIAL,
-    _macro_structure,
-    _structure_index,
-    RunContext,
-)
+from earworm import recent  # noqa: E402
+from earworm.frontmatter import parse  # noqa: E402
 
 REPO = Path(__file__).resolve().parent.parent
-
 SAMPLE = """---
 title: A Test Episode
 date: 2026-06-29
@@ -31,164 +21,230 @@ date: 2026-06-29
 
 This is the opening paragraph. It sets the scene plainly.
 
-So put it together. The middle does some work here. And it keeps going.
+The measurements initially agreed. The prior middle explains the failure mechanism.
 
 ---
 
-Which brings us to the cascade. A second body section with its own pivot.
+A different comparison exposed the fault. This changes what the first result meant.
 
-Thanks for listening, and I'll see you next time.
+The team collected reports from other applications. Those reports located a faulty core.
 """
 
 
-def _write(dir_: Path, name: str, body: str = SAMPLE) -> Path:
-    p = dir_ / name
-    p.write_text(body)
-    return p
+def _write(directory: Path, name: str, body: str = SAMPLE) -> Path:
+    path = directory / name
+    path.write_text(body)
+    return path
 
 
-def test_extract_signature_pulls_opening_closing_transitions() -> None:
-    from earworm.frontmatter import parse
-
+def test_legacy_signature_keeps_opening_closing_transitions() -> None:
     _, body = parse(SAMPLE)
-    sig = recent.extract_signature(body)
-    assert sig["opening"].startswith("This is the opening paragraph")
-    assert sig["closing"].startswith("Thanks for listening")
-    # interior paragraphs' first sentences become transitions; `---` is dropped
-    assert "So put it together." in sig["transitions"]
-    assert "Which brings us to the cascade." in sig["transitions"]
-    assert all(t != "---" for t in sig["transitions"])
+    signature = recent.extract_signature(body)
+    assert signature["opening"].startswith("This is the opening paragraph")
+    assert signature["closing"].endswith("Those reports located a faulty core.")
+    assert signature["transitions"] == [
+        "The measurements initially agreed.",
+        "A different comparison exposed the fault.",
+    ]
 
 
-def test_build_avoid_section_empty_without_history() -> None:
+def test_context_empty_without_readable_history() -> None:
     with tempfile.TemporaryDirectory() as tmp:
-        assert recent.build_avoid_section(Path(tmp) / "nonexistent") == ""
-        empty = Path(tmp) / "scripts"
-        empty.mkdir()
-        assert recent.build_avoid_section(empty) == ""
+        directory = Path(tmp)
+        assert recent.build_recent_context(directory / "missing") == ""
+        assert recent.build_recent_context(directory) == ""
+        _write(directory, "2026-06-29-0001-empty.md", "---\ntitle: Empty\n---\n")
+        (directory / "2026-06-29-0002-binary.md").write_bytes(b"\xff\xfe")
+        assert recent.build_recent_context(directory) == ""
 
 
-def test_build_avoid_section_includes_recurring_phrases() -> None:
+def test_only_generated_scripts_count_not_ingested_essays() -> None:
     with tempfile.TemporaryDirectory() as tmp:
-        d = Path(tmp)
-        _write(d, "2026-06-27-0016-some-topic.md")
-        block = recent.build_avoid_section(d)
-        assert "AVOID THESE — used in recent episodes:" in block
-        assert "So put it together." in block
-        assert "Thanks for listening" in block
-        assert "Recent openings" in block and "Recent closings" in block
+        directory = Path(tmp)
+        _write(directory, "2026-06-14-machines-of-loving-grace.md")
+        assert recent.recent_generated_scripts(directory) == []
+        assert recent.build_recent_context(directory) == ""
+        generated = _write(directory, "2026-06-27-0016-some-topic.md")
+        assert recent.recent_generated_scripts(directory) == [generated]
 
 
-def test_only_generated_scripts_counted_not_ingested() -> None:
+def test_latest_scripts_follow_completion_time_and_respect_zero_limit() -> None:
     with tempfile.TemporaryDirectory() as tmp:
-        d = Path(tmp)
-        # an ingested essay (no 4-digit topic id) must be ignored
-        _write(d, "2026-06-14-machines-of-loving-grace.md")
-        assert recent.recent_generated_scripts(d) == []
-        assert recent.build_avoid_section(d) == ""
-        # a generated episode is counted
-        _write(d, "2026-06-27-0016-some-topic.md")
-        assert len(recent.recent_generated_scripts(d)) == 1
-
-
-def test_recent_generated_scripts_takes_latest_n_by_mtime() -> None:
-    with tempfile.TemporaryDirectory() as tmp:
-        d = Path(tmp)
+        directory = Path(tmp)
         for i in range(5):
-            p = _write(d, f"2026-06-2{i}-000{i}-topic-{i}.md")
-            # stagger mtimes so ordering is deterministic, newest = highest i
-            t = 1_700_000_000 + i
-            import os
-
-            os.utime(p, (t, t))
-        latest = recent.recent_generated_scripts(d, n=3)
-        names = [p.name for p in latest]
-        assert names == [
+            path = _write(directory, f"2026-06-2{i}-000{i}-topic-{i}.md")
+            completed = 1_700_000_000 + i
+            os.utime(path, (completed, completed))
+        assert [p.name for p in recent.recent_generated_scripts(directory)] == [
             "2026-06-24-0004-topic-4.md",
             "2026-06-23-0003-topic-3.md",
             "2026-06-22-0002-topic-2.md",
-        ], names
+        ]
+        assert recent.recent_generated_scripts(directory, n=0) == []
+        assert recent.recent_generated_scripts(directory, n=-1) == []
+        assert recent.build_recent_context(directory, n=0) == ""
 
 
-def test_structure_index_rotates_with_topic_id() -> None:
-    n = len(MACRO_STRUCTURES)
-    # consecutive topic ids land on consecutive structures (rotation)
-    base = _structure_index("2026-06-29-0019-foo")
-    assert _structure_index("2026-06-29-0020-foo") == (base + 1) % n
-    assert _structure_index("2026-06-29-0021-foo") == (base + 2) % n
-    # reproducible for the same run_id
-    assert _structure_index("2026-06-29-0019-foo") == base
+def test_context_preserves_middle_developments_and_ending_in_order() -> None:
+    with tempfile.TemporaryDirectory() as tmp:
+        directory = Path(tmp)
+        _write(directory, "2026-06-29-0001-test.md")
+        context = recent.build_recent_context(directory)
+        opening = context.index("This is the opening paragraph.")
+        middle = context.index("The prior middle explains the failure mechanism.")
+        development = context.index("This changes what the first result meant.")
+        ending = context.index("Those reports located a faulty core.")
+        assert opening < middle < development < ending
+        assert "P2/4 | section 1 | 11 words:" in context
+        assert "P3/4 | section 2 |" in context
+        assert "P4/4 | section 2 |" in context
+        assert "not a format assignment" in context
+        assert "Shared structure is not automatically a defect" in context
 
 
-def test_macro_structure_directive_well_formed() -> None:
-    ctx = RunContext(
-        root=Path("/tmp"),
-        prompts=Path("/tmp/prompts"),
-        runs=Path("/tmp/runs"),
-        inbox_scripts=Path("/tmp/inbox"),
-        run_id="2026-06-29-0020-foo",
-        topic="foo",
-        date="2026-06-29",
-        review_enabled=True,
-    )
-    directive = _macro_structure(ctx)
-    assert directive.startswith("STRUCTURE FOR THIS EPISODE — ")
-    assert any(name in directive for name, _ in MACRO_STRUCTURES)
+def test_section_break_without_surrounding_blank_lines_is_not_a_paragraph() -> None:
+    with tempfile.TemporaryDirectory() as tmp:
+        directory = Path(tmp)
+        _write(
+            directory,
+            "2026-06-29-0001-test.md",
+            "---\ntitle: Breaks\n---\nFirst passage.\n---\nSecond passage.",
+        )
+        context = recent.build_recent_context(directory)
+        assert "2 paragraphs; showing 2" in context
+        assert "P1/2 | section 1" in context
+        assert "P2/2 | section 2" in context
 
 
-def test_script_prompt_lists_every_macro_structure() -> None:
-    # the catalog in pipeline.py and the menu in script.md must not drift
-    script_md = (REPO / "prompts" / "script.md").read_text()
-    for name, _ in MACRO_STRUCTURES:
-        assert name in script_md, f"macro structure {name!r} missing from script.md"
+def test_long_context_is_bounded_and_samples_the_whole_episode() -> None:
+    with tempfile.TemporaryDirectory() as tmp:
+        directory = Path(tmp)
+        paragraphs = [
+            f"Opening of passage {i}. " + "Evidence and explanation. " * 35
+            + f"The result of passage {i}."
+            for i in range(60)
+        ]
+        body = "---\ntitle: Long episode\n---\n\n" + "\n\n".join(paragraphs)
+        for i in range(3):
+            _write(directory, f"2026-06-29-000{i}-long.md", body)
+        context = recent.build_recent_context(
+            directory, max_chars_per_episode=2400, max_paragraphs=12
+        )
+        assert len(context) <= 3 * 2400 + 800
+        assert context.count("60 paragraphs; showing 12") == 3
+        assert context.count("P1/60 |") == 3
+        assert context.count("P60/60 |") == 3
+        assert "The result of passage 59." in context
+        assert "P28/60 |" in context
+        assert "[…]" in context
 
 
-def _rendered_stage_prompts(tmp: str) -> dict[str, str]:
-    """Render every real stage prompt against a minimal workspace."""
+def test_budget_validation_is_explicit() -> None:
+    with tempfile.TemporaryDirectory() as tmp:
+        for kwargs in ({"max_chars_per_episode": 999}, {"max_paragraphs": 1}):
+            try:
+                recent.build_recent_context(Path(tmp), **kwargs)
+            except ValueError:
+                pass
+            else:
+                raise AssertionError(f"Accepted unusable excerpt budget: {kwargs}")
+
+
+def test_compatibility_entry_point_provides_context_without_a_ban_list() -> None:
+    with tempfile.TemporaryDirectory() as tmp:
+        directory = Path(tmp)
+        _write(directory, "2026-06-29-0001-test.md")
+        context = recent.build_avoid_section(directory)
+        assert "The prior middle explains the failure mechanism." in context
+        assert "AVOID THESE" not in context
+
+
+def _rendered_stage_prompts(tmp: str, review_enabled: bool = True) -> dict[str, str]:
+    from earworm import llm
+    from earworm.pipeline import STAGES, RunContext
+
     root = Path(tmp)
-    ctx = RunContext(
+    context = RunContext(
         root=root,
-        prompts=REPO / "prompts",  # the real prompts, not a fixture
+        prompts=REPO / "prompts",
         runs=root / "runs",
         inbox_scripts=root / "inbox",
         run_id="2026-06-29-0020-foo",
-        topic="foo",
+        topic="A specific topic",
         date="2026-06-29",
-        review_enabled=True,
+        review_enabled=review_enabled,
     )
-    ctx.run_dir.mkdir(parents=True)
-    # script_review reads the staged script to measure its word count
-    ctx.staged_script.write_text("---\ntitle: T\n---\n\nA staged script body.\n")
+    context.run_dir.mkdir(parents=True, exist_ok=True)
+    context.report_path.write_text("Report evidence marker.")
+    context.review_path.write_text("Corrected evidence marker.")
+    context.script_review_path.write_text('"Draft body marker." Cut the duplicate.')
+    context.staged_script.write_text("---\ntitle: T\n---\n\nDraft body marker.\n")
+    context.done_scripts.mkdir(parents=True, exist_ok=True)
+    _write(context.done_scripts, "2026-06-27-0016-prior.md")
     return {
-        s.name: claude.render_prompt(ctx.prompts / s.prompt_file, **s.build_vars(ctx))
-        for s in STAGES
+        stage.name: llm.render_prompt(
+            context.prompts / stage.prompt_file, **stage.build_vars(context)
+        )
+        for stage in STAGES
     }
 
 
-def test_every_stage_prompt_renders_with_no_leftover_placeholders() -> None:
-    """Guards prompt/pipeline drift in both directions: a `{{var}}` added to a
-    prompt with no matching build_vars entry ships the literal braces to Claude."""
+def test_every_stage_renders_without_unresolved_prompt_variables() -> None:
     with tempfile.TemporaryDirectory() as tmp:
         for name, text in _rendered_stage_prompts(tmp).items():
-            assert "{{" not in text, f"unrendered placeholder in {name} prompt"
+            assert "{{" not in text, f"Unrendered placeholder in {name} prompt"
 
 
-def test_voice_partial_reaches_every_script_stage() -> None:
-    """The writer, reviewer, and reviser must all see the same voice rules — a
-    phrase banned for the writer is only enforced if the other two look for it."""
-    sentinel = "Hint placement is load-bearing"
-    assert sentinel in (REPO / "prompts" / VOICE_PARTIAL).read_text()
+def test_evidence_and_recent_middle_reach_each_editorial_handoff() -> None:
     with tempfile.TemporaryDirectory() as tmp:
         rendered = _rendered_stage_prompts(tmp)
+    for name in ("review", "script", "script_review", "revise"):
+        assert "Report evidence marker." in rendered[name], name
+        assert "The prior middle explains the failure mechanism." in rendered[name], name
     for name in ("script", "script_review", "revise"):
-        assert sentinel in rendered[name], f"voice rules missing from {name} prompt"
+        assert "Corrected evidence marker." in rendered[name], name
+        assert "Hint placement is load-bearing" in rendered[name], name
+    assert "Draft body marker." in rendered["script_review"]
+    assert "Draft body marker." in rendered["revise"]
+    assert "Cut the duplicate." in rendered["revise"]
+
+
+def test_disabled_review_does_not_leak_a_stale_review_into_writing() -> None:
+    with tempfile.TemporaryDirectory() as tmp:
+        rendered = _rendered_stage_prompts(tmp, review_enabled=False)
+    for name in ("script", "script_review", "revise"):
+        assert "Report evidence marker." in rendered[name], name
+        assert "Corrected evidence marker." not in rendered[name], name
+
+
+def test_research_report_envelope_remains_readable_as_show_notes() -> None:
+    from earworm import shownotes
+
+    prompt = (REPO / "prompts" / "research.md").read_text()
+    # Use the actual prompt's envelope examples so loosening its output contract
+    # cannot silently remove the summary or source links from rendered episodes.
+    examples = (
+        "# Report title",
+        "> Summary text",
+        "## Sources",
+        "- [Descriptive source title](https://source-url)",
+    )
+    for example in examples:
+        assert f"`{example}`" in prompt
+    assert "not a required episode outline" in prompt
+    report = "\n\n".join(examples)
+    with tempfile.TemporaryDirectory() as tmp:
+        path = _write(Path(tmp), "report.md", report)
+        summary, sources = shownotes.extract(path)
+    assert summary == "Summary text"
+    assert sources == ["Descriptive source title — https://source-url"]
 
 
 def main() -> int:
-    tests = [v for k, v in sorted(globals().items()) if k.startswith("test_")]
-    for t in tests:
-        t()
-        print(f"  ok  {t.__name__}")
+    tests = [value for name, value in sorted(globals().items()) if name.startswith("test_")]
+    for test in tests:
+        test()
+        print(f"  ok  {test.__name__}")
     print(f"\n{len(tests)} passed")
     return 0
 

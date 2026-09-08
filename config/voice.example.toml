@@ -1,5 +1,20 @@
 # Voice / TTS configuration. Copy to config/voice.toml.
-engine = "kokoro"          # local neural TTS, the only engine in v1
+engine = "kokoro"          # also supports "qwen" with a fixed reference, or "voicebox"
+
+# Optional native CUDA Qwen Base narration. Install qwen-tts in the selected
+# Python environment and download the pinned Base snapshot before enabling it.
+# The worker releases CUDA when an episode completes; it waits for a busy GPU.
+# [qwen]
+# python = "/path/to/qwen-venv/bin/python"
+# model_path = "/cache/snapshots/exact-model-commit"
+# model_revision = "exact-model-commit"
+# reference_audio = "/path/to/approved-reference.wav"
+# reference_text = "Exact transcript of the approved reference."
+# reference_sha256 = "sha256-of-approved-reference-wav"
+# cache_dir = "/path/to/narration-cache"
+# seed = 42
+# gpu_wait_sec = 600
+# timeout_sec = 2400
 
 [kokoro]
 voice = "af_heart"         # default narrator (Kokoro's top-graded voice); see README for all 54
@@ -11,6 +26,30 @@ lang_code = "a"            # 'a' = American English, 'b' = British English (MUST
 # Optional warmth/brightness blend — overrides `voice` when set. Weights are
 # normalized and built as a weighted sum of the voice tensors at render time.
 # blend = [["af_heart", 0.7], ["af_sky", 0.3]]
+
+# Speech-only literal substitutions; published transcript keeps the original.
+# Kokoro's existing config/lexicon.toml IPA overrides are still applied afterward.
+# [kokoro.aliases]
+# "Example technical term" = "approved spoken spelling"
+
+# Optional preconfigured Voicebox server; this does not install or start one.
+# First supported backend: Qwen3-TTS 12Hz 1.7B CustomVoice, preset profile only.
+# Voicebox personality rewriting, normalization, and effects are always disabled.
+# Pin both revision labels to your deployed weights/runtime and update them when
+# either changes: they separate the per-sentence cache. They are operator-supplied,
+# not a claim that Voicebox reports or verifies model revisions over its API.
+# [voicebox]
+# url = "http://127.0.0.1:17493"
+# profile_id = "your-existing-customvoice-preset-profile-id"
+# model_revision = "exact-model-commit"
+# runtime_revision = "exact-voicebox-commit"
+# language = "en"
+# seed = 42
+# direction = "Speak clearly at a conversational pace."
+# cache_dir = "cache/narration"
+# timeout_sec = 600
+# [voicebox.aliases]
+# "Example technical term" = "approved spoken spelling"
 
 [audio]
 bitrate = "128k"           # mp3 bitrate; voice is fine at 96-128k

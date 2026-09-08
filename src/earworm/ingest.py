@@ -6,14 +6,14 @@ a file, a URL, or stdin, lightly adapt it for the ear, and stage it for the watc
 Both paths meet at `earworm watch`. Ingest never touches the topics queue — it is for
 text that is already written, not researched.
 
-Two operations need Claude Code (earworm is coupled to it by design — see
-pipeline.py): fetching + extracting an article from a URL, and the audio-adaptation
+Two operations use the configured API/local route: fetching + extracting an article from a URL, and the audio-adaptation
 pass that cleans reading-only artifacts ("see the figure below", footnote markers,
 markdown) into speakable prose. Local files/stdin in --raw mode use neither: a
 deterministic markdown->prose strip handles them with no LLM.
 """
 from __future__ import annotations
 
+import json
 import os
 import re
 import sys
@@ -21,8 +21,9 @@ import tempfile
 from datetime import date as date_cls
 from pathlib import Path
 from typing import Callable, Optional
+from urllib.parse import quote, urlsplit, urlunsplit
 
-from . import claude, pipeline
+from . import llm, pipeline
 from .config import Paths, paths, pipeline_config
 from .feed import DEFAULT_FEED
 from .frontmatter import parse
@@ -144,9 +145,9 @@ def adapted_too_short(src_words: int, out_words: int, threshold: float = 0.6) ->
     return out_words < threshold * src_words
 
 
-# --- Claude passes (injected in tests) -------------------------------------
+# --- the model passes (injected in tests) -------------------------------------
 
-def _run_with_retry(
+def _run_pass(
     stage_name: str,
     prompt: str,
     expect: Path,
@@ -154,57 +155,98 @@ def _run_with_retry(
     *,
     allowed: tuple[str, ...],
     timeout: int,
-) -> None:
-    """Drive claude.run with the same model/retry/fallback treatment the pipeline
-    stages get, keyed `[pipeline.<stage_name>]` in pipeline.toml."""
+    ledger_path: Optional[Path] = None,
+) -> dict:
+    """Use the same bounded backend and ledger as generated episodes."""
     cfg = pipeline.PipelineConfig.from_toml(pipeline_config())
     sc = cfg.for_stage(stage_name)
     chosen = pipeline.resolve_model(model, sc.model, cfg.default_model)
-    retries = cfg.default_retries if sc.retries is None else sc.retries
     t = timeout if sc.timeout is None else sc.timeout
-    pipeline.with_retry(
-        lambda m: claude.run(
-            prompt,
-            cwd=paths().root,
-            allowed_tools=allowed,
-            expect_file=expect,
-            timeout=t,
-            model=m,
-        ),
-        model=chosen,
-        retries=retries,
-        fallback_model=sc.fallback_model,
+    return llm.run(
+        prompt, cwd=paths().root, allowed_tools=allowed, expect_file=expect,
+        timeout=t, model=chosen, stage=stage_name,
+        ledger_path=ledger_path or expect.parent / "usage.jsonl",
     )
 
 
-def _claude_fetch(url: str, out_path: Path, model: Optional[str]) -> str:
-    """Fetch + extract an article's text from a URL, verbatim, into out_path."""
-    prompt = claude.render_prompt(
+def _source_url_key(url: str) -> str:
+    """Match the requested URL to the fetcher's common URL normalization."""
+    parsed = urlsplit(url)
+    scheme = parsed.scheme.lower()
+    if scheme not in {"http", "https"} or not parsed.hostname or parsed.username or parsed.password:
+        raise ValueError("Expected a public article URL without credentials")
+    host = parsed.hostname.encode("idna").decode().lower()
+    if ":" in host:
+        host = f"[{host}]"
+    port = parsed.port
+    if port is not None and (scheme, port) not in {("http", 80), ("https", 443)}:
+        host += f":{port}"
+    path = quote(parsed.path or "/", safe="/%:@!$&'()*+,;=-._~")
+    query = quote(parsed.query, safe="/%?:@!$&'()*+,;=-._~")
+    return urlunsplit((scheme, host, path, query, ""))
+
+
+def _complete_cached_source(url: str, result: dict) -> str:
+    """Use only backend-owned complete extraction, never a model's restatement."""
+    requested = _source_url_key(url)
+    artifact_path = result.get("artifacts_path")
+    if not isinstance(artifact_path, str) or not artifact_path:
+        raise ValueError("URL ingestion has no retained extraction; refusing to stage a partial essay")
+    artifacts = Path(artifact_path).resolve()
+    cache = (artifacts / "source-cache").resolve()
+    if cache.parent != artifacts:
+        raise ValueError("URL ingestion source cache must remain inside its attempt artifacts")
+    for path in sorted(cache.glob("*.json")):
+        if path.resolve().parent != cache:
+            continue
+        try:
+            record = json.loads(path.read_text())
+            if not isinstance(record, dict) or record.get("kind") != "fetch":
+                continue
+            if record.get("extraction_complete") is not True:
+                continue
+            text = record.get("text")
+            source_url = record.get("url")
+            if not isinstance(text, str) or not text.strip() or not isinstance(source_url, str):
+                continue
+            if _source_url_key(source_url) == requested:
+                return text
+        except (OSError, ValueError, UnicodeError):
+            continue
+    raise ValueError("No complete cached extraction matches the requested URL; refusing to stage a partial essay")
+
+
+def _model_fetch(url: str, out_path: Path, model: Optional[str], *, ledger_path: Optional[Path] = None) -> str:
+    """Request retrieval, then use the complete deterministic extraction."""
+    prompt = llm.render_prompt(
         paths().prompts / "ingest_fetch.md", url=url, out_path=str(out_path)
     )
-    _run_with_retry(
+    result = _run_pass(
         "ingest_fetch", prompt, out_path, model,
-        allowed=("WebFetch", "WebSearch", "Read", "Write", "Edit"), timeout=600,
+        allowed=("web_fetch",), timeout=600, ledger_path=ledger_path,
     )
-    return out_path.read_text()
+    text = _complete_cached_source(url, result)
+    out_path.write_text(text)
+    return text
 
 
-def _claude_adapt(
-    source_path: Path, out_path: Path, model: Optional[str], author: Optional[str] = None
+def _model_adapt(
+    source_path: Path, out_path: Path, model: Optional[str], author: Optional[str] = None,
+    *, ledger_path: Optional[Path] = None,
 ) -> str:
     """Rewrite the source text for the ear (light cleanup, full content) into out_path."""
     author_note = (
         f"The author is {author}. Credit them by name in that opening sentence." if author else ""
     )
-    prompt = claude.render_prompt(
+    prompt = llm.render_prompt(
         paths().prompts / "ingest.md",
-        source_path=str(source_path),
+        source_content=source_path.read_text(),
         out_path=str(out_path),
         author_note=author_note,
     )
-    _run_with_retry(
+    _run_pass(
         "ingest", prompt, out_path, model,
-        allowed=("Read", "Write", "Edit"), timeout=1800,
+        allowed=(), timeout=1800, ledger_path=ledger_path,
     )
     return out_path.read_text()
 
@@ -229,8 +271,8 @@ def ingest_source(
     """Stage one pre-written script for the renderer.
 
     `source` is a file path, an http(s) URL, or "-" for stdin. With `raw`, the text
-    is used as-is (markdown stripped to prose); otherwise it goes through the Claude
-    audio-adaptation pass. URLs are always fetched + extracted by Claude. `source_url`
+    is used as-is (markdown stripped to prose); otherwise it goes through the model
+    audio-adaptation pass. URLs are always fetched + extracted by the model. `source_url`
     overrides the show-note source link — use it to read text from a file/stdin while
     citing the original web URL. `author`, when given, is recorded in front-matter and
     opens the episode with a spoken attribution. `feed`, when given, routes the episode
@@ -241,8 +283,12 @@ def ingest_source(
     p = p or paths()
     p.ensure_dirs()
     feed_slug = slugify(feed) if feed and feed.strip() else DEFAULT_FEED
-    fetch = _fetch or _claude_fetch
-    adapt = _adapt or _claude_adapt
+    # The title is unknown until a URL has been fetched. Give each ingestion its
+    # own cost ledger first so fetch and adaptation share one bounded operation.
+    attempt_dir = Path(tempfile.mkdtemp(prefix="ingest-attempt-", dir=p.runs))
+    ledger_path = attempt_dir / "usage.jsonl"
+    fetch = _fetch or (lambda url, out, m: _model_fetch(url, out, m, ledger_path=ledger_path))
+    adapt = _adapt or (lambda src, out, m, a: _model_adapt(src, out, m, a, ledger_path=ledger_path))
     read_stdin = _stdin or (lambda: sys.stdin.read())
 
     source_ref: Optional[str] = None
@@ -252,7 +298,7 @@ def ingest_source(
         text = read_stdin()
     elif is_url(source):
         source_ref = source
-        tmp = Path(tempfile.mkstemp(dir=p.runs, suffix=".md")[1])
+        tmp = attempt_dir / "fetched.md"
         try:
             text = fetch(source, tmp, model)
         finally:
@@ -327,4 +373,5 @@ def ingest_source(
         "source_words": src_words,
         "body_words": body_words,
         "warning": warning,
+        "usage_path": str(ledger_path),
     }

@@ -2,10 +2,9 @@
 #
 # Owns the painful native stack — CPU PyTorch + Kokoro + espeak-ng + ffmpeg — and
 # ships a pre-warmed model, so `earworm watch` / `earworm render` work out of the box
-# with no first-run download. Generation (`earworm run`) needs the authenticated
-# `claude` CLI and normally runs on the host; Earworm's two halves share only a folder,
-# mounted here at /data. (You CAN generate in-container too: install the claude CLI and
-# pass ANTHROPIC_API_KEY — see README "Docker".)
+# with no first-run download. Generation (`earworm run`) uses configured API/local
+# models through Pi on the host. Earworm's two halves share only a folder,
+# mounted here at /data. The renderer image does not include the Pi runner.
 #
 # NOTE: built and shipped CPU-only on purpose. The default Linux torch wheel bundles
 # CUDA (~2GB); UV_TORCH_BACKEND=cpu selects the CPU PyTorch index instead.

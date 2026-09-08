@@ -45,17 +45,27 @@ def dedot_acronyms(text: str) -> str:
 
 
 def _ts(seconds: float) -> str:
-    h = int(seconds // 3600)
-    m = int((seconds % 3600) // 60)
-    s = seconds % 60
-    return f"{h:02d}:{m:02d}:{s:06.3f}"
+    milliseconds = round(seconds * 1000)
+    whole_seconds, ms = divmod(milliseconds, 1000)
+    minutes, s = divmod(whole_seconds, 60)
+    h, m = divmod(minutes, 60)
+    return f"{h:02d}:{m:02d}:{s:02d}.{ms:03d}"
 
 
-def build_vtt(segments: list[tuple[str, float, float]]) -> str:
-    """segments: list of (text, start_seconds, end_seconds)."""
+def shift_segments(segments: list[tuple[str, float, float]], offset_sec: float) -> list[tuple[str, float, float]]:
+    """Move canonical cue times to account for audio inserted before narration."""
+    if offset_sec < 0:
+        raise ValueError("transcript offset cannot be negative")
+    return [(text, start + offset_sec, end + offset_sec) for text, start, end in segments]
+
+
+def build_vtt(segments: list[tuple[str, float, float]], *, canonical: bool = False) -> str:
+    """Build cues; canonical text bypasses the legacy normalized-acronym repair."""
     lines = ["WEBVTT", ""]
     for text, start, end in segments:
-        clean = dedot_acronyms(" ".join(text.split()).strip())
+        clean = " ".join(text.split()).strip()
+        if not canonical:
+            clean = dedot_acronyms(clean)
         if not clean:
             continue
         lines.append(f"{_ts(start)} --> {_ts(end)}")

@@ -1,5 +1,5 @@
 """Auto-topic generator. Reads interests.md and what the show has already
-covered, asks Claude Code for fresh topics — consulting live sources for timely
+covered, asks an API/local model for fresh topics — consulting live sources for timely
 paper drops — screens them against past coverage, and queues the survivors.
 
 One half of the two-producer queue (the other is `earworm add`). The runner drains
@@ -9,21 +9,22 @@ Screening runs in two layers, because the failure that shipped a duplicate episo
 slipped past a lexical-only check:
   1. lexical — `db.find_duplicate_topic` catches exact / casing / punctuation re-adds.
   2. semantic — `dedup.filter_new` catches the same idea worded differently.
-The semantic pass fails open (a rare duplicate beats dropping every topic when the
-judge misbehaves); the enriched generation context is the first line of defence.
+Malformed judge output falls back to lexical screening. Provider, authorization,
+and spending errors stop generation; they must not silently bypass screening.
 """
 from __future__ import annotations
 
 import re
 import sys
+import time
 from datetime import date
 
-from . import claude, db, dedup, pipeline
+from . import llm, db, dedup, pipeline
 from .config import paths, pipeline_config
 
 # Live sources the discovery pass may consult so it can catch and fast-track a
 # major paper the day it drops instead of proposing from a stale knowledge cutoff.
-DISCOVERY_TOOLS = ("WebSearch", "WebFetch")
+DISCOVERY_TOOLS = ("web_search", "web_fetch")
 
 # Run-order weight for a timely, high-impact paper the discovery pass flags with a
 # leading `PAPER:` marker, so it jumps ahead of evergreen topics. Manual queues can
@@ -86,9 +87,8 @@ def generate(count: int = 3, model: str | None = None, *, use_sources: bool = Tr
     gate still clears the quota, and queues every survivor — so the result can
     exceed `count`, banking the surplus for a later day when the judge rejects
     everything. Returns the topics actually added (after lexical + semantic dedup).
-    `use_sources` lets the discovery pass consult the web for timely drops; it
-    falls back to pure ideation if the sourced pass fails, so autogen still
-    produces topics offline.
+    `use_sources` lets the discovery pass consult the web for timely drops; a failed sourced pass stops so unsupported current-event
+    guesses cannot enter the queue. Explicit --no-sources still permits ideation.
     """
     db.init()
     p = paths()
@@ -96,7 +96,7 @@ def generate(count: int = 3, model: str | None = None, *, use_sources: bool = Tr
     coverage = db.recent_coverage()
     pool = count + _CANDIDATE_MARGIN
 
-    prompt = claude.render_prompt(
+    prompt = llm.render_prompt(
         p.prompts / "autogen.md",
         date=date.today().isoformat(),
         n=str(pool),
@@ -104,34 +104,17 @@ def generate(count: int = 3, model: str | None = None, *, use_sources: bool = Tr
         recent="\n".join(f"- {t}" for t in coverage) or "(nothing yet)",
     )
 
-    # autogen is one-shot generation, but it gets the same model + retry treatment
-    # as the pipeline stages, keyed `[pipeline.autogen]`.
+    # The backend owns the discovery route and any bounded transport fallback.
     cfg = pipeline.PipelineConfig.from_toml(pipeline_config())
     sc = cfg.for_stage("autogen")
     chosen = pipeline.resolve_model(model, sc.model, cfg.default_model)
-    retries = cfg.default_retries if sc.retries is None else sc.retries
     timeout = 300 if sc.timeout is None else sc.timeout
-
-    def _discover(tools: tuple[str, ...] | None) -> str:
-        return pipeline.with_retry(
-            lambda m: claude.run_text(
-                prompt, cwd=p.root, timeout=timeout, model=m, allowed_tools=tools
-            ),
-            model=chosen,
-            retries=retries,
-            fallback_model=sc.fallback_model,
-        )
-
-    try:
-        text = _discover(DISCOVERY_TOOLS if use_sources else None)
-    except pipeline.RETRYABLE:
-        if not use_sources:
-            raise
-        print(
-            "[autogen] source-aware discovery failed; falling back to ideation",
-            file=sys.stderr,
-        )
-        text = _discover(None)
+    ledger = p.runs / f"autogen-{time.time_ns()}" / "usage.jsonl"
+    text = llm.run_text(
+        prompt, cwd=p.root, timeout=timeout, model=chosen,
+        allowed_tools=DISCOVERY_TOOLS if use_sources else None,
+        stage="autogen", ledger_path=ledger,
+    )
 
     proposals = _parse_proposals(text, pool)
 
@@ -147,17 +130,18 @@ def generate(count: int = 3, model: str | None = None, *, use_sources: bool = Tr
         priority_of[topic] = priority
 
     # Layer 2 — semantic: drop topics that repeat past coverage in different words.
-    # Reuses the autogen model as the judge; fails open so a flaky judge never
-    # blocks the queue (the lexical pass + enriched context still apply).
+    # A separately configured route allows this bounded classification to run locally.
     candidates = list(priority_of)
-    judge = lambda prompt_text: claude.run_text(  # noqa: E731 - small closure, model fixed
-        prompt_text, cwd=p.root, timeout=timeout, model=chosen
+    dedup_stage = cfg.for_stage("dedup")
+    dedup_timeout = 180 if dedup_stage.timeout is None else dedup_stage.timeout
+    judge = lambda prompt_text: llm.run_text(  # noqa: E731 - small closure, model fixed
+        prompt_text, cwd=p.root, timeout=dedup_timeout, stage="dedup", ledger_path=ledger
     )
     try:
         kept, dropped = dedup.filter_new(
             candidates, coverage, judge=judge, prompt_path=p.prompts / "dedup.md"
         )
-    except pipeline.RETRYABLE + (ValueError,):
+    except ValueError:
         print(
             "[autogen] semantic dedup unavailable; keeping lexically-clean topics",
             file=sys.stderr,

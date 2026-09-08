@@ -113,17 +113,20 @@ def _cmd_run(args: argparse.Namespace) -> int:
             try:
                 # run_one claims atomically; report the row IT took, since a
                 # concurrent drainer may have grabbed the one we peeked.
-                result = runner.run_one(model=args.model)
+                result = runner.run_one(model=args.model, stage_for_render=not args.no_stage)
                 drained += 1
                 print(f"done #{result['topic_id']}: {result['topic']}")
             except Exception as exc:  # noqa: BLE001 - record + continue draining
                 failed += 1
                 print(f"failed #{row['id']}: {type(exc).__name__}: {exc}", file=sys.stderr)
+                current = db.get_topic(int(row["id"]))
+                if current is not None and current["status"] == "pending":
+                    break  # Configuration failed before claiming; retrying would loop forever.
         print(f"drained {drained}, failed {failed}")
         return 1 if failed else 0
 
     try:
-        result = runner.run_one(topic_id=args.id, model=args.model)
+        result = runner.run_one(topic_id=args.id, model=args.model, stage_for_render=not args.no_stage)
     except Exception as exc:  # noqa: BLE001
         print(f"run failed: {type(exc).__name__}: {exc}", file=sys.stderr)
         return 1
@@ -169,7 +172,10 @@ def _cmd_render(args: argparse.Namespace) -> int:
     if not script.exists():
         print(f"error: no such file: {script}", file=sys.stderr)
         return 2
-    result = render.render_script_file(script, publish=not args.no_publish)
+    if args.output_dir:
+        result = render.render_preview(script, Path(args.output_dir).expanduser().resolve())
+    else:
+        result = render.render_script_file(script, publish=not args.no_publish)
     print(f"{result['status']}: {result.get('title')}")
     if result.get("audio_path"):
         print(f"  audio: {result['audio_path']} ({result['duration_sec']}s, {result['engine']})")
@@ -244,10 +250,10 @@ def build_parser() -> argparse.ArgumentParser:
     p_ingest.add_argument(
         "--raw",
         action="store_true",
-        help="skip the Claude audio-adaptation pass; use the text as-is",
+        help="skip the API/local audio-adaptation pass; use the text as-is",
     )
     p_ingest.add_argument(
-        "--model", default=None, help="override Claude model for the adapt/fetch passes"
+        "--model", default=None, help="override the configured API/local model for adapt/fetch"
     )
     p_ingest.add_argument(
         "--source-url",
@@ -274,7 +280,8 @@ def build_parser() -> argparse.ArgumentParser:
     p_run = sub.add_parser("run", help="drain pending topic(s)")
     p_run.add_argument("--id", type=int, default=None, help="run a specific topic id")
     p_run.add_argument("--all", action="store_true", help="drain every pending topic")
-    p_run.add_argument("--model", default=None, help="override Claude model (e.g. sonnet)")
+    p_run.add_argument("--model", default=None, help="override the model ID on the configured provider")
+    p_run.add_argument("--no-stage", action="store_true", help="keep the completed script in its run directory, outside the watched inbox")
     p_run.set_defaults(func=_cmd_run)
 
     sub.add_parser(
@@ -283,7 +290,7 @@ def build_parser() -> argparse.ArgumentParser:
 
     p_autogen = sub.add_parser("autogen", help="propose + queue fresh topics from interests.md")
     p_autogen.add_argument("--count", type=int, default=3, help="how many topics to propose")
-    p_autogen.add_argument("--model", default=None, help="override Claude model")
+    p_autogen.add_argument("--model", default=None, help="override the configured API/local model")
     p_autogen.add_argument(
         "--no-sources",
         action="store_true",
@@ -298,6 +305,7 @@ def build_parser() -> argparse.ArgumentParser:
     p_render = sub.add_parser("render", help="render a single script file")
     p_render.add_argument("file", help="path to a script .md")
     p_render.add_argument("--no-publish", action="store_true", help="render only, don't upload/register")
+    p_render.add_argument("--output-dir", default=None, help="export a private preview here without modifying the ledger or moving the script")
     p_render.set_defaults(func=_cmd_render)
 
     p_dl = sub.add_parser("download-models", help="pre-fetch the Kokoro model + voices")

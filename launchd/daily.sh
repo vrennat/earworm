@@ -30,11 +30,16 @@ cd "$EARWORM_DIR" || exit 1
 # failing before Python could start. `uv run --locked` detects that shape and
 # recreates the environment from uv.lock using uv's managed Python.
 UV="$(command -v uv || true)"
-if [ -z "$UV" ]; then
+if [ -n "${EARWORM_PYTHON:-}" ]; then
+    # Badlands uses the pinned Qwen environment, shared with its disposable
+    # narrator process. Do not uv-sync away those separate GPU dependencies.
+    EARWORM=("$EARWORM_PYTHON" -m earworm.cli)
+elif [ -z "$UV" ]; then
     echo "[daily] uv is not on launchd's PATH; run launchd/install.sh" >&2
     exit 78  # EX_CONFIG
+else
+    EARWORM=("$UV" run --project "$EARWORM_DIR" --locked earworm)
 fi
-EARWORM=("$UV" run --project "$EARWORM_DIR" --locked earworm)
 
 # 1. Crash recovery: a SIGKILLed prior run leaves its topic 'running' and
 #    next_pending() ignores 'running' rows, so it would be orphaned. Requeue it.

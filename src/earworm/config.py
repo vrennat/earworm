@@ -120,7 +120,7 @@ def _load_toml(path: Path) -> dict:
 
 
 def pipeline_config() -> dict:
-    """Per-stage model / retry / toggle settings. Optional — every key defaults."""
+    """Per-stage model, timeout, and toggle settings. Optional — every key defaults."""
     return _load_toml(paths().config / "pipeline.toml")
 
 

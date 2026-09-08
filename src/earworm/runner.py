@@ -1,9 +1,9 @@
 """`earworm run` — drain one pending topic through the generation pipeline.
 
 The pipeline shape lives in `pipeline.py` (research -> review -> script ->
-script-review -> revise, each a Claude Code pass). This module is pure
+script-review -> revise, each an API/local pass). This module is pure
 orchestration: pick a topic, build the run context, drive the active stages
-through the executor (per-stage model + retry + fallback), atomically expose the
+through the bounded backend, atomically expose the
 finished script to the renderer, and record status in the queue db.
 """
 from __future__ import annotations
@@ -26,17 +26,15 @@ def slugify(text: str, maxlen: int = 60) -> str:
     return text[:maxlen].strip("-") or "topic"
 
 
-def _has_content(path: Path) -> bool:
-    return path.exists() and path.stat().st_size > 0
-
-
-def run_one(topic_id: Optional[int] = None, *, model: Optional[str] = None) -> dict:
+def run_one(topic_id: Optional[int] = None, *, model: Optional[str] = None,
+            stage_for_render: bool = True) -> dict:
     """Process one topic. If topic_id is None, take the oldest pending item.
 
     `model` is the CLI --model override: when set it forces the primary model for
     every stage (per-stage config still supplies fallbacks). When None, each stage
     uses its configured model or the pipeline default.
     """
+    cfg = pipeline.PipelineConfig.from_toml(pipeline_config())
     db.init()
     if topic_id is not None:
         row = db.get_topic(topic_id)
@@ -58,7 +56,6 @@ def run_one(topic_id: Optional[int] = None, *, model: Optional[str] = None) -> d
 
     p = paths()
     p.ensure_dirs()
-    cfg = pipeline.PipelineConfig.from_toml(pipeline_config())
     stages = pipeline.active_stages(cfg)
     ctx = pipeline.RunContext(
         root=p.root,
@@ -79,23 +76,28 @@ def run_one(topic_id: Optional[int] = None, *, model: Optional[str] = None) -> d
         for stage in stages:
             # skip_if_exists stages resume from a prior partial run; script + revise
             # always re-run so a re-queued topic gets a fresh script.
-            if stage.skip_if_exists and _has_content(stage.expect_file(ctx)):
+            if pipeline.can_resume(stage, ctx, cfg, model):
                 continue
             pipeline.run_stage(stage, ctx, cfg, cli_model=model)
 
         # Atomically expose the finished (revised) script to the watcher. os.replace
         # is an atomic rename within the filesystem, so `earworm watch` never sees a
         # half-written or pre-revision file.
-        os.replace(ctx.staged_script, ctx.script_path)
+        pipeline.validate_script(ctx.staged_script.read_text(), ctx)
+        if stage_for_render:
+            os.replace(ctx.staged_script, ctx.script_path)
     except Exception as exc:  # noqa: BLE001 - record failure, re-raise for CLI
         db.mark_failed(tid, f"{type(exc).__name__}: {exc}")
         raise
 
-    db.mark_done(tid, str(ctx.report_path), str(ctx.script_path))
+    final_script = ctx.script_path if stage_for_render else ctx.staged_script
+    db.mark_done(tid, str(ctx.report_path), str(final_script))
     return {
         "topic_id": tid,
         "topic": topic,
         "run_id": run_id,
         "report_path": str(ctx.report_path),
-        "script_path": str(ctx.script_path),
+        "script_path": str(final_script),
+        "usage_path": str(ctx.ledger_path),
+        "staged_for_render": stage_for_render,
     }
