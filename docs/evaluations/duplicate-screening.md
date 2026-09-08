@@ -85,6 +85,19 @@ the newly proposed batch. Both passes use the same model, so errors can correlat
 A missed shortlist match can still pass through. More independent labeled cases
 and unattended discovery runs are needed before making a general quality claim.
 
-This candidate has not been deployed. Production remains on the voice/API release.
-Deploy the code and both duplicate prompt files together; the response contract
-changed. No new API service, model download, or GPU eviction is required.
+## Deployment
+
+Deployed to Badlands on September 7, 2026 at 23:50 Pacific (September 8, 06:50
+UTC), from source commit `836e48b`. The two screening modules and both prompts
+were switched together while the producer was idle. The watcher restarted
+successfully, and the daily timer remains scheduled for 07:00 Pacific.
+
+Two fresh production-runtime replays, in original and reversed archive order,
+each passed all 12 diagnostic cases without misses or false rejections. The
+production queue and configuration were unchanged. All 15 standalone test files
+also passed in the staged release using the production Python environment.
+Deployment and rollback receipts are retained on the production host.
+
+No new API service, model download, or GPU eviction was required. Future updates
+must deploy the code and both duplicate prompt files together because they share
+the response contract.
