@@ -208,6 +208,43 @@ def _commentary_parsing_tests() -> None:
     assert capped == [("Topic one", 0), ("Topic two", 0)], capped
 
 
+def _marked_parsing_tests() -> None:
+    """When the model marks its topic lines, everything else is ignored, wherever it
+    sits. The lane-rotation prompt's first live run (2026-09-22) put five lines of
+    tally and working-out before the topics; the count cap queued the notes as
+    topics #151-155 and dropped the real ones. A marker selects instead of filters."""
+    from earworm import autogen
+
+    text = "\n".join(
+        [
+            "I have good material. Let me finalize my lane analysis and topic selection.",
+            "The tally: Lane A (6, over), Lane C (2, at target), Lane B (1, under).",
+            "**Lane D (4 topics given it's most under-served):**",
+            "1. **CRASH Clock / Kessler in LEO** — a number and where it came from.",
+            "",
+            "Let me finalizeTOPIC: Kessler risk is now measured in days: what does the CRASH Clock measure?",
+            "TOPIC: PAPER: A timely paper worth fast-tracking",
+            "- topic: **Why a bank run now finishes in hours**",
+            "Sources:",
+            "- [arXiv cs.CL](https://arxiv.org/list/cs.CL/recent)",
+        ]
+    )
+    assert autogen._parse_proposals(text) == [
+        ("Kessler risk is now measured in days: what does the CRASH Clock measure?", 0),
+        ("A timely paper worth fast-tracking", autogen.PAPER_PRIORITY),
+        ("Why a bank run now finishes in hours", 0),
+    ], autogen._parse_proposals(text)
+
+    # The cap applies to marked lines, not to the notes in front of them.
+    assert autogen._parse_proposals(text, 2) == [
+        ("Kessler risk is now measured in days: what does the CRASH Clock measure?", 0),
+        ("A timely paper worth fast-tracking", autogen.PAPER_PRIORITY),
+    ]
+
+    # Without any marker the older filter path still applies (see the tests above).
+    assert autogen._parse_proposals("Topic one\nTopic two") == [("Topic one", 0), ("Topic two", 0)]
+
+
 def main() -> int:
     from earworm import db
 
@@ -220,6 +257,7 @@ def main() -> int:
     _incomplete_screening_does_not_queue()
     _proposal_parsing_tests()
     _commentary_parsing_tests()
+    _marked_parsing_tests()
 
     with tempfile.TemporaryDirectory() as tmp:
         d = _fresh_db(tmp)

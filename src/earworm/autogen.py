@@ -56,17 +56,31 @@ _COMMENTARY = re.compile(r":\s*$")
 # A line that is nothing but a markdown link is a citation from the sources list,
 # not a topic — even when its title text reads like one.
 _BARE_LINK = re.compile(r"^\[[^\]]*\]\([^)]*\)$")
+# The lane-rotation prompt (2026-09-21) makes the model tally recent coverage
+# before proposing, and its first live run returned that working-out ahead of the
+# topics. Filtering could not tell the notes from topics, so the `count` cap
+# queued five lines of reasoning (#151-155) and the real topics, at the end of
+# the response, never reached the queue. The prompt now asks for a `TOPIC:`
+# marker on every topic line; when any line carries it, the parser selects the
+# marked lines wherever they sit and ignores everything else. Responses without
+# the marker keep the older filter-based path.
+_TOPIC_TAG = re.compile(r"TOPIC\s*:\s*", re.IGNORECASE)
 
 
 def _parse_proposals(text: str, count: int | None = None) -> list[tuple[str, int]]:
     """Turn the model's one-per-line output into (topic, priority) pairs, dropping
-    the preamble/heading/citation lines the model wraps them in. A line prefixed
-    `PAPER:` marks a timely paper drop worth fast-tracking; the marker is stripped
+    the preamble/heading/citation lines the model wraps them in. When any line
+    carries a `TOPIC:` marker, only marked lines are read. A line prefixed
+    `PAPER:` (after the marker, if any) marks a timely paper drop worth fast-tracking; the marker is stripped
     and the topic gets `PAPER_PRIORITY`. `count` caps the result, as a backstop for
     commentary that slips past the filters above."""
     out: list[tuple[str, int]] = []
-    for line in text.splitlines():
-        raw = line.strip().lstrip("-*0123456789. \t").strip()
+    lines = text.splitlines()
+    marked = [m for m in (_TOPIC_TAG.search(line) for line in lines) if m]
+    if marked:
+        lines = [m.string[m.end():] for m in marked]
+    for line in lines:
+        raw = line.strip().lstrip("-*0123456789. \t").strip().strip("*").strip()
         if not raw:
             continue
         priority = 0
