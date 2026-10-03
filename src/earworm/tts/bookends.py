@@ -56,7 +56,7 @@ def title_line(show: str, title: str) -> str:
 def wrap(pcm: np.ndarray, rate: int, settings: dict) -> tuple[np.ndarray, float]:
     """Return (cue + narration + cue, seconds added before the narration)."""
     reject_unknown(settings, SETTINGS, "bookends")
-    gain = _rms(pcm) * 10 ** (float(settings.get("cue_level_db", -6)) / 20)
+    gain = _rms(pcm) * 10 ** (float(settings.get("cue_level_db", -10)) / 20)
     before, after = [], []
     if settings.get("intro_cue"):
         sound = cue(settings["intro_cue"], rate)

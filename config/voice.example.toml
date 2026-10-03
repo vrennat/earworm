@@ -76,6 +76,6 @@ pad_end_sec = 1.0
 # announce_title = true        # speaks "<show title>. <episode title>." first
 # intro_cue = "rising"         # rising | chord | falling (original synthesized plucks)
 # outro_cue = "falling"
-# cue_level_db = -6            # cue RMS relative to narration RMS
+# cue_level_db = -10           # cue RMS relative to narration RMS
 # intro_gap_sec = 0.4
 # outro_gap_sec = 1.4
