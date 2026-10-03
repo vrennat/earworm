@@ -22,26 +22,32 @@ from .frontmatter import parse
 from .tts import TTSEngine, get_engine
 
 
-def _synthesize(body: str, engine: TTSEngine, config: dict) -> tuple[bytes, list, dict]:
+def _synthesize(body: str, engine: TTSEngine, config: dict, title: str = "") -> tuple[bytes, list, dict]:
     """Keep canonical captions separate from the text a voice engine pronounces."""
     started = time.monotonic()
     if hasattr(engine, "render"):
+        from .tts import bookends as bookend
         from .tts.base import NarrationRequest, reject_unknown
         from .tts.audio import encode_mp3, mastering_lead_seconds
 
         delivery = config.get("delivery", {})
         reject_unknown(delivery, {"direction", "seed"}, "delivery")
+        bookends = config.get("bookends", {})
+        spoken = body
+        if bookends.get("announce_title") and title:
+            spoken = f"{bookend.title_line(show_config().get('title', 'Earworm'), title)}\n\n---\n\n{body}"
         request = NarrationRequest(
-            canonical_text=body,
+            canonical_text=spoken,
             speech_aliases=config.get("speech_aliases", {}),
             direction=delivery.get("direction"),
             seed=delivery.get("seed"),
         )
         result = engine.render(request)
-        mp3 = encode_mp3(result.pcm, result.sample_rate,
+        pcm, cue_lead = bookend.wrap(result.pcm, result.sample_rate, bookends) if bookends else (result.pcm, 0.0)
+        mp3 = encode_mp3(pcm, result.sample_rate,
                          config.get("audio", {}).get("bitrate", "128k"),
                          mastering=config.get("mastering"))
-        lead = mastering_lead_seconds(config.get("mastering"))
+        lead = mastering_lead_seconds(config.get("mastering")) + cue_lead
         segments = [(text, start + lead, end + lead) for text, start, end in result.segments]
         provenance = {"canonical_captions": True, "engine": result.engine,
                       "details": result.provenance, "caption_offset_seconds": lead}
@@ -67,7 +73,7 @@ def render_preview(script_path: Path, output_dir: Path, engine: Optional[TTSEngi
     engine = engine or get_engine(config)
     output_dir.mkdir(parents=True, exist_ok=True)
     audio_path = output_dir / "episode.mp3"
-    mp3, segments, provenance = _synthesize(body, engine, config)
+    mp3, segments, provenance = _synthesize(body, engine, config, meta.get("title", ""))
     audio_path.write_bytes(mp3)
     duration = MP3(str(audio_path)).info.length
     summary, sources = shownotes.extract(
@@ -168,7 +174,7 @@ def render_script_file(
     if engine is None:
         engine = get_engine(config)
 
-    mp3_bytes, segments, provenance = _synthesize(body, engine, config)
+    mp3_bytes, segments, provenance = _synthesize(body, engine, config, title)
     audio_path.write_bytes(mp3_bytes)
 
     transcript_path: Optional[Path] = None

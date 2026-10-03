@@ -26,6 +26,15 @@ def gpu_busy() -> bool:
     return any(row.strip() != str(os.getpid()) for row in rows.splitlines() if row.strip()) or int(free.splitlines()[0]) < 6500
 
 
+def paragraph_seed(request: dict, text: str) -> int:
+    """One fixed seed reused for every paragraph gives them all the same sampling
+    start. Optionally offset it by the paragraph's own text so delivery varies
+    while each paragraph still renders, and caches, deterministically."""
+    if not request.get("seed_per_paragraph"):
+        return request["seed"]
+    return (request["seed"] + int(hashlib.sha256(text.encode()).hexdigest()[:8], 16)) % 2**32
+
+
 def run(request: dict) -> dict:
     import numpy as np
     import soundfile as sf
@@ -40,6 +49,7 @@ def run(request: dict) -> dict:
     if digest(reference) != request["reference_sha256"]:
         raise ValueError("Qwen reference hash mismatch")
     identity = {k: request[k] for k in ("model_revision", "reference_sha256", "reference_text", "seed", "worker_sha256")}
+    identity["seed_per_paragraph"] = bool(request.get("seed_per_paragraph"))
     identity["packages"] = {p: importlib.metadata.version(p) for p in ("qwen-tts", "torch", "transformers")}
     cache = Path(request["cache_dir"])
     cache.mkdir(parents=True, exist_ok=True)
@@ -90,8 +100,8 @@ def run(request: dict) -> dict:
             prompt = model.create_voice_clone_prompt(ref_audio=str(reference), ref_text=request["reference_text"],
                                                        x_vector_only_mode=False)
             for index in missing:
-                torch.manual_seed(request["seed"])
-                torch.cuda.manual_seed_all(request["seed"])
+                torch.manual_seed(paragraph_seed(request, texts[index]))
+                torch.cuda.manual_seed_all(paragraph_seed(request, texts[index]))
                 wavs, rate = model.generate_voice_clone(text=texts[index], language="English",
                                                         voice_clone_prompt=prompt, max_new_tokens=2048)
                 samples = np.asarray(wavs[0], dtype=np.float32)

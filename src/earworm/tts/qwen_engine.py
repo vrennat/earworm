@@ -34,7 +34,7 @@ class QwenEngine:
     def __init__(self, voice_config: dict) -> None:
         settings = voice_config.get("qwen", {})
         reject_unknown(settings, {"python", "model_path", "model_revision", "reference_audio",
-                                 "reference_text", "reference_sha256", "cache_dir", "seed",
+                                 "reference_text", "reference_sha256", "cache_dir", "seed", "seed_per_paragraph",
                                  "timeout_sec", "gpu_wait_sec"}, "Qwen")
         for key in ("model_path", "model_revision", "reference_audio", "reference_text", "reference_sha256"):
             if not settings.get(key):

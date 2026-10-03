@@ -172,7 +172,7 @@ def test_private_render_hashes_spoken_input_and_removes_stale_captions():
         output = root / "preview"
         output.mkdir()
         (output / "episode.vtt").write_text("Old captions for another recording")
-        def synthesize(body, engine, settings):
+        def synthesize(body, engine, settings, title=""):
             assert body.strip() == "Original spoken words."
             script.write_text("Edited while rendering")
             return b"audio bytes", [], {"canonical_captions": True, "engine": "fake"}

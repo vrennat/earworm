@@ -9,7 +9,13 @@ Write for someone listening:
 - Keep humor when there is a specific observation worth making. No joke quota, staged banter, generic quips, or instructions to imitate a named creator. A solo voice must carry the explanation without unseen visuals.
 - Make connections the listener needs. A brief restatement can restore orientation after a demanding explanation; a later detail can justify returning to an earlier one. Cut repetitions that merely announce the same lesson again. There is no percentage target for information density.
 - Use a precise term consistently rather than cycling through synonyms. Introduce technical terms with enough context to follow them. If a conclusion could move unchanged into an unrelated episode, ground it in this evidence or cut it. Never invent detail to make it specific.
-- Let the material determine order, pace, and ending. Do not require a cold open, definition in the second section, rising excitement, twist, recap, callback, caveat section, or closing moral. Repeating a useful structure is allowed; making different subjects sound interchangeable is a defect.
+- Let the material determine order and pace. Do not require a cold open, definition in the second section, rising excitement, twist, recap, callback, caveat section, or closing moral. Repeating a useful structure is allowed; making different subjects sound interchangeable is a defect.
+
+Openings and endings:
+- The player announces the show name and the episode title immediately before the first line. Do not repeat the title or welcome the listener. Within the first two or three sentences, the listener should know what question or development this episode follows and have a reason to want the answer.
+- Every episode needs a deliberate ending. Stopping is not ending. The final passage resolves what the opening set up: answer the question, show what the developments add up to, or state plainly what remains unknown and why it matters. Do this in this episode's specific people, numbers, and mechanisms.
+- The final passage often steps back and connects the result to something larger the evidence supports, such as a consequence still visible today or what the story shows about how this kind of problem gets solved. Keep it grounded. A conclusion that could be pasted into an unrelated episode is a generic moral, which is a defect.
+- The last sentence should sound final when spoken aloud: a complete, settled statement, not a transition, a mid-argument step, a question, or a tease. Spend two to five sentences landing it. The listener should be able to tell the episode is over before the audio stops.
 
 Evidence in speech:
 - Preserve the report's evidence tags and research-review corrections in the substance of the narration, without reading the tags aloud. State the actual limit of a [limited] result. Represent a [contested] disagreement fairly. Attribute [reported] accounts as accounts. Even [strong] evidence only supports the claim its methods tested.
@@ -21,7 +27,7 @@ Established house protections:
 - Delete manufactured suspense and stock reveal language: "here's the thing", "here's the catch", "here's where it gets interesting", "but it's not what you think", "but it's not what you'd expect", "you won't believe", "wait for it", "but it gets stranger", "plot twist", and "here's the kicker", including close variants. Give the actual development instead.
 - Delete crutch announcements: the "I want to be ___ about" family, "Sit with that", "Sit with what that does", "The honest summary/read/version is", and "put it together". State the underlying point.
 - Do not stage a personal conversion: "I went in expecting X, came out believing Y", "when I opened this report", "going into this I assumed", "I came out of this convinced", or similar research autobiography.
-- No stock sign-offs such as "Thanks for listening" or "I'll see you next time". End with this episode's material.
+- No stock sign-offs such as "Thanks for listening" or "I'll see you next time". Land the ending with this episode's material.
 - Avoid habitual fragment corrections and "That isn't X. That's Y." reversals. They are not required devices to ration into each episode. When a real contrast matters, explain it clearly in the surrounding thought.
 
 TTS-aware writing:
