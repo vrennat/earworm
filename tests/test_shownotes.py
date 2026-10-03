@@ -100,7 +100,7 @@ def test_renderer_publishes_and_archives_final_coverage() -> None:
         ):
             result = render.render_script_file(script, engine=engine, log=lambda message: None)
             assert result["status"] == "rendered"
-            synthesize.assert_called_once_with(BODY, engine, {})
+            synthesize.assert_called_once_with(BODY, engine, {}, "How names compare")
             assert tag.call_args.kwargs["notes"] == expected_notes
             assert tag.call_args.kwargs["title"] == "How names compare"
             assert publish.call_args.kwargs["description"] == expected_notes
@@ -132,7 +132,7 @@ def test_preview_uses_same_final_coverage_without_narrating_metadata() -> None:
         ):
             result = render.render_preview(script, root / "preview", engine=engine)
             assert result["status"] == "preview" and result["published"] is False
-            synthesize.assert_called_once_with(BODY, engine, {})
+            synthesize.assert_called_once_with(BODY, engine, {}, "How names compare")
             assert tag.call_args.kwargs["notes"] == shownotes.format_notes(FINAL_SUMMARY, SOURCES)
         assert script.exists()
 

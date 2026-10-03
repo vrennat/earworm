@@ -69,3 +69,13 @@ loudnorm = "loudnorm=I=-16:TP=-1.5:LRA=11"   # EBU R128, -16 LUFS podcast standa
 fade_out_sec = 0.5
 pad_start_sec = 0.3
 pad_end_sec = 1.0
+
+# Optional episode bookends for engines with canonical narration (Qwen, Kokoro,
+# Voicebox). Omit the section to render narration alone.
+# [bookends]
+# announce_title = true        # speaks "<show title>. <episode title>." first
+# intro_cue = "rising"         # rising | chord | falling (original synthesized plucks)
+# outro_cue = "falling"
+# cue_level_db = -10           # cue RMS relative to narration RMS
+# intro_gap_sec = 0.4
+# outro_gap_sec = 1.4

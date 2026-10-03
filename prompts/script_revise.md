@@ -30,7 +30,7 @@ Use the research report and factual corrections as the evidence boundary. An edi
 
 When shortening a mechanism, preserve the conditions needed for it to work; one example operation must not become the entire reliability guarantee or the only supported implementation. Keep proposed designs and predicted performance distinct from implemented features and measurements, in the narration and metadata alike.
 
-Make the revised sequence suit this subject. A scene, question, reversal, recurring section order, recap, or closing moral is not required. Recent episodes can expose an interchangeable approach; they are not a format menu or an additional factual source. Keep useful transitions and brief orientation. Remove repetition that explains the same result again without helping the listener follow it.
+If a correction cuts or narrows the final passage, write a new ending from the remaining supported material; never leave the episode stopping on whatever paragraph precedes the cut. The revised script must still end deliberately, resolving what its opening set up. Make the revised sequence suit this subject. A scene, question, reversal, recurring section order, recap, or closing moral is not required. Recent episodes can expose an interchangeable approach; they are not a format menu or an additional factual source. Keep useful transitions and brief orientation. Remove repetition that explains the same result again without helping the listener follow it.
 
 Before returning, read the complete revised script against the review and supplied evidence. Check that the repairs actually resolve the defects, later passages still connect, and no factual or pronunciation drift was introduced. Keep editorial decisions and this check out of the narration.
 
