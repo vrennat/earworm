@@ -1,0 +1,70 @@
+{
+  "commit": "5de03247ad9b6febe9c5a442551bbfd718d104fe",
+  "files_verified": 17,
+  "config_hashes_unchanged": true,
+  "services": {
+    "earworm-watch.service": "active",
+    "earworm-daily.timer": "active"
+  },
+  "daily_result": "success",
+  "next_timer": "Sat 2026-10-03 14:00:00 UTC",
+  "topic": {
+    "id": 165,
+    "topic": "How did ports, railways, truckers, and shipping lines agree on a container they could all use, and who had to change first?",
+    "status": "done",
+    "run_id": "2026-10-03-0165-how-did-ports-railways-truckers-and-shipping-lines-agree-on",
+    "notes": null
+  },
+  "episode": {
+    "id": 149,
+    "slug": "2026-10-03-0165-how-did-ports-railways-truckers-and-shipping-lines-agree-on",
+    "title": "How the Shipping Container Got Its Size",
+    "duration_sec": 453.72,
+    "published_at": "2026-10-03T07:57:19+00:00"
+  },
+  "feed_status": 200,
+  "feed_title_and_description_match": true,
+  "audio_status": 206,
+  "audio_content_type": "audio/mpeg",
+  "audio_content_range": "bytes 0-1023/7271975",
+  "mp3_header": true,
+  "commission_result": "new",
+  "queue": [
+    {
+      "id": 166,
+      "topic": "When a browser says a connection is secure, which promise did the certificate authority make, and how can it be withdrawn?",
+      "status": "pending"
+    },
+    {
+      "id": 167,
+      "topic": "What is a health system buying when it pays for an antibiotic that it hopes doctors will rarely prescribe?",
+      "status": "pending"
+    },
+    {
+      "id": 168,
+      "topic": "How does a speech system decide who said which words when two people talk at once?",
+      "status": "pending"
+    }
+  ],
+  "deployed_sha256": {
+    "prompts/autogen.md": "10e37fb9611dfa34870bbb8fdbd87957d03f97dcc2b3cd3fbb2ce4b90f214114",
+    "prompts/dedup.md": "676373562de2e31dc931d26879195b4d233cd090a2d716fd2ad18d37af3434d4",
+    "prompts/dedup_confirm.md": "989c80bad80852a8734e116fa047c08c0ec79c765404def051146a024ceecebc",
+    "prompts/research.md": "efae827acb8f813c8b250766baae66bb00f93a4df5ad70e18b89ad721f803b97",
+    "prompts/review.md": "b55d2f7af0d40fe1e8e78333ab17a44b1feee9ff77f545feafab08b843840d1b",
+    "prompts/script.md": "0bd4b64cb54179a7ae14347b0fdf6555afe3a1bc5ae7aa845490c359a097ef97",
+    "prompts/script_review.md": "948ecced97cf8ae2f06dd4162c4d6eba9c2ec44a6473419724a4eca10242e424",
+    "prompts/script_revise.md": "178490318e643084638ffed910df77e6b6f08978d39520056b5b789430f2af9b",
+    "src/earworm/autogen.py": "a3227c6a434ac795d937fa383543660836958d0b887b901305d7d45e77890da9",
+    "src/earworm/db.py": "7b025b046c5f3c5c3b631252d516862202637d877033071dcfca3fb14d62e6bb",
+    "src/earworm/dedup.py": "0044f460936d955098457cd8f33efa07d4ba94cf5d099fc43a3378ea6973969d",
+    "src/earworm/pi_bounds.ts": "1cce1697925156cd11c12ca9e7015d5ceaa0e8b6cb6b16d618b74bf003514ae8",
+    "src/earworm/pipeline.py": "cfb053c2bba26ebf728d798d5b97a7de6ade1412112a59b24fd969a346e95b5c",
+    "src/earworm/render.py": "15b773c648566e0098fa24a8ad8f79f00465141a6b6935d2672701115495b4db",
+    "src/earworm/runner.py": "58869a37638f50d22970729820a4d32c20c4baab8ad281c8fac12ffec8d400b4",
+    "src/earworm/shownotes.py": "1fb2eb708ed24f24b5cea065ac6c3e1cfa61e477d02357fa025b8a478da2ae34",
+    "interests.md": "7e555e816b845967fa8ca0d9f86dd075d1013ed4bb428c9f78febdb43f609415"
+  },
+  "production_sample_required_manual_corrections": true,
+  "audio_listening_assessment": false
+}
