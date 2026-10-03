@@ -40,6 +40,10 @@ def _semantic_dedup_tests() -> None:
         if len(calls) == 1:
             assert "1. SQLite application format" in prompt
             return json.dumps(search)
+        if len(calls) == 3:
+            assert "1. SQLite concurrency" in prompt
+            assert "1. A fresh story" in prompt
+            return '{"decisions":[{"n":1,"matches":[],"reason":"Distinct story"}]}'
         assert "Why reasoning has a wasted tail" not in prompt
         return json.dumps({"decisions": [
             {"n": 2, "duplicate": False, "reason": "Concurrency differs from document format"},
@@ -49,21 +53,22 @@ def _semantic_dedup_tests() -> None:
     assert kept == candidates[1:]
     assert [d.candidate for d in dropped] == candidates[:1]
     assert "SQLite application format" in dropped[0].matches
-    assert len(calls) == 2
+    assert len(calls) == 3
 
     def never(_prompt):
         raise AssertionError("unnecessary model call")
-    assert dedup.filter_new(candidates, [], judge=never, prompt_path=prompt_path) == (candidates, [])
+    assert dedup.filter_new(candidates[:1], [], judge=never, prompt_path=prompt_path) == (candidates[:1], [])
     assert dedup.filter_new([], covered, judge=never, prompt_path=prompt_path) == ([], [])
+    assert dedup.filter_new([], [], judge=never, prompt_path=prompt_path) == ([], [])
     new = json.dumps({"decisions": [
         {"n": n, "matches": [], "reason": "Distinct"} for n in range(1, 4)
     ]})
     calls.clear()
     def all_new(prompt):
         calls.append(prompt)
-        return new
+        return new if len(calls) == 1 else '{"decisions":[{"n":1,"matches":[],"reason":"Distinct"}]}'
     assert dedup.filter_new(candidates, covered, judge=all_new, prompt_path=prompt_path) == (candidates, [])
-    assert len(calls) == 1
+    assert len(calls) == 3
     assert dedup.parse_duplicate_indices("```json\n" + json.dumps(search) + "\n```", 3, covered) == {1: [covered[0]], 2: [covered[0]]}
 
     expanded = json.loads(json.dumps(search))
@@ -121,16 +126,77 @@ def _semantic_dedup_tests() -> None:
             raise AssertionError("Accepted invalid confirmation")
 
 
+def _batch_screening_tests() -> None:
+    import json
+    from earworm import dedup
+
+    prompt_path = Path(__file__).resolve().parent.parent / "prompts" / "dedup.md"
+    candidates = ["SQLite documents", "SQLite application files", "SQLite concurrency"]
+    responses = iter([
+        '{"decisions":[{"n":1,"matches":[1],"reason":"Possible same mechanism"}]}',
+        '{"decisions":[{"n":1,"duplicate":true,"reason":"Same document portability story"}]}',
+        '{"decisions":[{"n":1,"matches":[1],"reason":"Same database, possibly adjacent"}]}',
+        '{"decisions":[{"n":1,"duplicate":false,"reason":"Different mechanism; overlap unclear"}]}',
+    ])
+    calls = []
+    def judge(prompt):
+        calls.append(prompt)
+        return next(responses)
+    kept, dropped = dedup.filter_new(candidates, [], judge=judge, prompt_path=prompt_path)
+    assert kept == [candidates[0], candidates[2]], kept
+    assert [d.candidate for d in dropped] == [candidates[1]]
+    assert candidates[0] in dropped[0].matches
+    assert len(calls) == 4
+    assert all(candidates[1] not in prompt for prompt in calls[2:]), "Dropped proposals cannot reject later neighbors"
+
+    # The first accepted topic wins in either input order, and an archive reject
+    # cannot claim the keeper position. Rejection receipts retain input order.
+    covered = ["Prior episode"]
+    for first, second in [("New reactor story", "Same reactor deal"), ("Same reactor deal", "New reactor story")]:
+        candidates = [first, "Archive repeat", second]
+        responses = iter([
+            json.dumps({"decisions": [
+                {"n": 1, "matches": [], "reason": "New"},
+                {"n": 2, "matches": [1], "reason": "Same past evidence"},
+                {"n": 3, "matches": [], "reason": "New against archive"},
+            ]}),
+            '{"decisions":[{"n":1,"duplicate":true,"reason":"Same old episode"}]}',
+            '{"decisions":[{"n":1,"matches":[1],"reason":"Same new event"}]}',
+            '{"decisions":[{"n":1,"duplicate":true,"reason":"Same event and payoff"}]}',
+        ])
+        calls.clear()
+        kept, dropped = dedup.filter_new(candidates, covered, judge=judge, prompt_path=prompt_path)
+        assert kept == [first]
+        assert [d.candidate for d in dropped] == candidates[1:]
+        assert first in dropped[1].matches
+        assert all("Archive repeat" not in prompt and "Prior episode" not in prompt for prompt in calls[2:])
+
+    # Worst case: every retrieval suggests an ambiguous match, so all candidates
+    # survive and require confirmation. Archive is sent once; cost stays <= 2N.
+    candidates = [f"Distinct mechanism {n}" for n in range(4)]
+    calls.clear()
+    def ambiguous(prompt):
+        calls.append(prompt)
+        size = len(candidates) if len(calls) <= 2 else 1
+        field, value = ("matches", [1]) if len(calls) % 2 else ("duplicate", False)
+        return json.dumps({"decisions": [
+            {"n": n, field: value, "reason": "Adjacent, different mechanism"} for n in range(1, size + 1)
+        ]})
+    assert dedup.filter_new(candidates, covered, judge=ambiguous, prompt_path=prompt_path) == (candidates, [])
+    assert len(calls) == 2 * len(candidates)
+    assert all(covered[0] not in prompt for prompt in calls[2:])
+
+
 def _incomplete_screening_does_not_queue() -> None:
     from unittest.mock import patch
     from earworm import autogen, llm
+    source = Path(__file__).resolve().parent.parent / "prompts"
     for bad_stage in ("search", "confirmation"):
         with tempfile.TemporaryDirectory() as tmp, patch.dict(os.environ, {"EARWORM_HOME": tmp}):
             d = _fresh_db(tmp)
             d.add_topic("An earlier topic")
             p = paths()
             (p.root / "prompts").mkdir(parents=True, exist_ok=True)
-            source = Path(__file__).resolve().parent.parent / "prompts"
             for name in ("autogen.md", "dedup.md", "dedup_confirm.md"):
                 (p.prompts / name).write_text((source / name).read_text())
             responses = ["New proposal", "{}"] if bad_stage == "search" else [
@@ -145,6 +211,35 @@ def _incomplete_screening_does_not_queue() -> None:
                 else:
                     raise AssertionError("Malformed screening was ignored")
             assert len(d.list_topics()) == 1
+
+    # A later within-batch failure must not leak already accepted topics into an
+    # empty queue. Discovery and every screening call share the same run ledger.
+    for bad_stage in ("search", "confirmation", "budget"):
+        with tempfile.TemporaryDirectory() as tmp, patch.dict(os.environ, {"EARWORM_HOME": tmp}):
+            d = _fresh_db(tmp)
+            p = paths()
+            (p.root / "prompts").mkdir(parents=True, exist_ok=True)
+            for name in ("autogen.md", "dedup.md", "dedup_confirm.md"):
+                (p.prompts / name).write_text((source / name).read_text())
+            responses = [
+                "TOPIC: First new story\nTOPIC: Second new story\nTOPIC: Third new story",
+                '{"decisions":[{"n":1,"matches":[],"reason":"Second story is distinct"}]}',
+            ]
+            if bad_stage == "confirmation":
+                responses += ['{"decisions":[{"n":1,"matches":[1],"reason":"Possible match"}]}', "{}"]
+            else:
+                responses += [llm.LLMError("The LLM run budget is exhausted.") if bad_stage == "budget" else "{}"]
+            with patch.object(llm, "run_text", side_effect=responses) as run:
+                try:
+                    autogen.generate(count=1)
+                except llm.LLMError as exc:
+                    expected_error = "budget" if bad_stage == "budget" else "no proposals queued"
+                    assert expected_error in str(exc)
+                else:
+                    raise AssertionError("Late batch screening failure was ignored")
+                assert len({call.kwargs["ledger_path"] for call in run.call_args_list}) == 1
+                assert all(call.kwargs["stage"] == "dedup" for call in run.call_args_list[1:])
+            assert d.list_topics() == []
     paths.cache_clear()
 
 
@@ -254,6 +349,7 @@ def main() -> int:
     assert db.normalize_topic("   ") == ""
 
     _semantic_dedup_tests()
+    _batch_screening_tests()
     _incomplete_screening_does_not_queue()
     _proposal_parsing_tests()
     _commentary_parsing_tests()

@@ -150,11 +150,44 @@ recent episodes, including their middles and endings. There is no outline rotati
 Resume records check input and artifact hashes before reusing research or review.
 They include the stage's effective route and backend code; changing only the writer's
 allowance does not invalidate completed research. Research retries reuse retained sources.
+With research review enabled, its first line must be `EPISODE: PROCEED` or
+`EPISODE: HOLD`. A hold or malformed decision stops before writing and staging,
+retains the research/review artifacts, and marks the topic failed for inspection.
+Resumed reviews pass the same gate. Update `prompts/review.md` alongside the code
+in existing workspaces: `earworm init` preserves local prompts, and old reviews
+without a decision fail closed. A changed review prompt invalidates its resume
+fingerprint on an explicit rerun. Disabling research review also disables this gate.
+Before writing, the runner also screens the selected `## Editorial commission`
+against the recent script excerpts through the existing bounded dedup route.
+This catches a reviewer rescuing an unsupported new question with an old story.
+Missing commissions, possible recent repeats, and screening errors stop before prose;
+`commission-screen.json` records the outcome. Resumed reviews are screened again
+against current recent coverage. This adds one local classification call on the
+shared run ledger. Unlike the full-archive discovery screen, a possible return to
+one of the last three stories requires inspection; automatic confirmation cannot
+overrule that cooling-off decision. This can hold a worthwhile follow-up, which
+can be reconsidered explicitly after inspection or once other episodes intervene.
 Retrieval preserves table headers, caches full extracted sources, and has a total text
-allowance. The final permitted request writes the artifact with tools disabled.
+allowance. Excess tool calls in a response are blocked without running; the
+remaining bounded request writes the artifact with tools disabled. No request or
+spending cap is increased to finish an exhausted research attempt.
 
 URL ingestion uses the complete cached extraction as its source, rather than a model's
 restatement of the article. Missing or incomplete extraction stops before adaptation.
+
+Topic discovery receives separate recent main-feed history, the active queue in
+execution order, and the full main-feed novelty archive. The recent window uses
+rendered episode records, which do not establish publication or listening.
+Failed leads, private unrendered previews, and other feeds do not count as coverage.
+The prompt plans the buffered candidates as a sequence and rechecks its mix after
+priority changes; lane and within-batch variety remain editorial guidance rather
+than deterministic quotas. Semantic screening compares each surviving candidate
+with earlier accepted candidates as well as the archive; malformed responses stop
+the entire batch before queue writes. Full-history prompts retain the backend
+input cap and stop without queue writes if they outgrow it. New scripts carry a
+concise `description` of the finished narration. Rendering uses that description
+for the ledger and feed, preserving the report Sources. Older scripts fall back
+to research summaries, which may be broader than the final spoken episode.
 
 **Narration** defaults to local [Kokoro](https://github.com/hexgrad/kokoro). The optional
 Voicebox adapter supports the first Qwen CustomVoice audition. Clean transcript text,

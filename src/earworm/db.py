@@ -14,6 +14,7 @@ from pathlib import Path
 from typing import Iterator, Optional
 
 from .config import paths
+from .frontmatter import parse as parse_frontmatter
 
 SCHEMA = """
 CREATE TABLE IF NOT EXISTS topics (
@@ -134,30 +135,89 @@ def find_duplicate_topic(topic: str) -> Optional[sqlite3.Row]:
     return None
 
 
-def recent_coverage(limit: int = 80) -> list[str]:
-    """Human-readable lines describing what the show has already covered, newest
-    first: each episode as `Title — <thesis/description>` and each queued topic as
-    its full text. Feeds both the autogen generation prompt (so the writer steers
-    clear) and the semantic-dedup gate (so a re-phrased repeat is caught).
+def _staged_topics(conn: sqlite3.Connection) -> list[sqlite3.Row]:
+    """Main-feed scripts waiting in the watcher, excluding private previews."""
+    staged: list[sqlite3.Row] = []
+    inbox = paths().inbox_scripts.resolve()
+    for row in conn.execute(
+        "SELECT id, topic, status, priority, script_path FROM topics t "
+        "WHERE status='done' AND script_path IS NOT NULL AND NOT EXISTS "
+        "(SELECT 1 FROM episodes e WHERE e.slug=t.run_id) ORDER BY script_path"
+    ):
+        script = Path(row["script_path"])
+        if script.parent.resolve() != inbox:
+            continue
+        try:
+            metadata, _ = parse_frontmatter(script.read_text())
+        except (OSError, UnicodeError, ValueError):
+            continue  # A watcher may have moved the script since the query.
+        if metadata.get("feed", "default") == "default":
+            staged.append(row)
+    return staged
 
-    Episodes carry their one-line thesis description, which is what makes semantic
-    overlap legible — two episodes can have unrelated catchy titles ("The Part
-    Nobody Wrote Down" vs "The Recipe Was Right There") yet identical theses.
+
+def recent_coverage(limit: int | None = None) -> list[str]:
+    """Main-feed novelty archive plus active commitments, newest first.
+
+    Default to the whole archive: an old episode is still covered. Failed leads
+    and other feeds are not coverage of this show. Include active queued topics
+    without repeating the topic behind each episode. Finished but unrendered
+    scripts in the watched inbox are commitments; private previews are excluded.
+    This is NOT a playback window; discovery_context supplies that separately.
+    The backend's input budget still bounds a call and fails before queue writes.
     """
     lines: list[str] = []
     with connect() as conn:
         for r in conn.execute(
-            "SELECT title, description FROM episodes WHERE title IS NOT NULL "
+            "SELECT title, description FROM episodes WHERE title IS NOT NULL AND feed='default' "
             "ORDER BY id DESC LIMIT ?",
-            (limit,),
+            (-1 if limit is None else limit,),
         ):
             desc = (r["description"] or "").strip().split("\n", 1)[0].strip()
             lines.append(f"{r['title']} — {desc}" if desc else str(r["title"]))
+        for r in _staged_topics(conn):
+            lines.append(f"[staged topic #{r['id']}; not rendered] {r['topic']}")
         for r in conn.execute(
-            "SELECT topic FROM topics ORDER BY id DESC LIMIT ?", (limit,)
+            "SELECT id, topic, status FROM topics "
+            "WHERE status IN ('pending', 'running') "
+            "ORDER BY id DESC LIMIT ?", (-1 if limit is None else limit,)
         ):
-            lines.append(str(r["topic"]))
+            lines.append(f"[{r['status']} topic #{r['id']}; not rendered] {r['topic']}")
     return lines
+
+
+def discovery_context(window: int = 10) -> dict[str, str]:
+    """Separate heard-material proxies from the projected upcoming schedule.
+
+    Rendered main-feed episodes count even if manually ingested into that feed.
+    Publication/listening is not inferred. Staged scripts precede running work,
+    then pending items use priority/FIFO order. Nothing is re-queued here.
+    """
+    history: list[str] = []
+    upcoming: list[str] = []
+    with connect() as conn:
+        episodes = list(conn.execute(
+            "SELECT e.id, e.title, e.description, e.created_at, "
+            "(SELECT t.topic FROM topics t WHERE t.run_id=e.slug LIMIT 1) AS topic "
+            "FROM episodes e WHERE e.feed='default' AND e.title IS NOT NULL "
+            "ORDER BY e.created_at DESC, e.id DESC LIMIT ?", (window,)
+        ))
+        for r in reversed(episodes):
+            desc = (r["description"] or "").strip().split("\n", 1)[0].strip()
+            history.append(f"- {r['created_at'][:10]} episode #{r['id']}: {r['title']} — {desc}"
+                           + (f"\n  Original topic: {r['topic']}" if r["topic"] else ""))
+        for r in _staged_topics(conn):
+            upcoming.append(f"- [staged; awaiting narration; topic #{r['id']}] {r['topic']}")
+        for r in conn.execute(
+            "SELECT id, topic, status, priority FROM topics "
+            "WHERE status IN ('pending', 'running') "
+            "ORDER BY CASE status WHEN 'running' THEN 0 ELSE 1 END, priority DESC, id ASC"
+        ):
+            upcoming.append(f"- [{r['status']}; priority={r['priority']}; topic #{r['id']}] {r['topic']}")
+    return {
+        "recent_episodes": "\n".join(history) or "(no rendered main-feed episodes)",
+        "queued_topics": "\n".join(upcoming) or "(no staged, running, or pending topics)",
+    }
 
 
 def add_topic(topic: str, source: str = "manual", priority: int = 0) -> int:

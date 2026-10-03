@@ -2,17 +2,24 @@
 
 This module owns artifact handoffs. The Pi backend owns deadlines, provider
 fallback, and spending so a failed stage cannot multiply retries across layers.
+
+Review contract migration: review-enabled workspaces must update their local
+prompts/review.md alongside this code. Legacy reviews without the decision line
+fail closed. Updating the prompt invalidates the review input fingerprint, so an
+explicit rerun generates a new review; artifacts are never silently grandfathered
+in or automatically retried. Configurations with review disabled remain valid.
 """
 from __future__ import annotations
 
 import hashlib
 import json
+import re
 import tomllib
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Callable, Optional, Sequence
 
-from . import llm, recent
+from . import dedup, llm, recent
 from .frontmatter import parse as _parse_frontmatter
 
 
@@ -234,8 +241,76 @@ def validate_script(text: str, ctx: RunContext) -> None:
         raise ValueError("Script contains code fences instead of plain spoken prose.")
 
 
+def require_episode_approval(ctx: RunContext) -> None:
+    """Fail closed on fresh or resumed evidence reviews before spending on prose."""
+    if not ctx.review_enabled:
+        return
+    lines = _read(ctx.review_path).splitlines()
+    decision = lines[0] if lines else ""
+    if decision == "EPISODE: PROCEED":
+        return
+    if decision == "EPISODE: HOLD":
+        reason = "Evidence review put this episode on HOLD; see review.md before retrying."
+    else:
+        reason = "Review must begin with exactly EPISODE: PROCEED or EPISODE: HOLD; refusing to write or stage."
+    raise StageError("review", ValueError(reason))
+
+
+def screen_editorial_commission(ctx: RunContext, cfg: PipelineConfig) -> None:
+    """Check the selected story, including reframes, against recent narration.
+
+    Called once at the review handoff, even for a resumed review. The existing
+    shortlist judge uses the run's shared budget. A possible return to one of
+    the latest stories requires inspection before writing; it is not a confirmed
+    duplicate verdict. Neither a cached classification nor the reviewer's own
+    approval can bypass comparison with current coverage.
+    """
+    if not ctx.review_enabled:
+        return
+    require_episode_approval(ctx)
+    receipt: dict = {"candidate": "", "result": "error", "matches": []}
+    receipt_path = ctx.run_dir / "commission-screen.json"
+    try:
+        review = _read(ctx.review_path)
+        headings = list(re.finditer(r"(?m)^## Editorial commission[ \t]*$", review))
+        if len(headings) != 1:
+            raise ValueError("Review must contain exactly one ## Editorial commission section.")
+        remainder = review[headings[0].end():]
+        candidate = re.split(r"(?m)^#{1,2}[ \t]+", remainder, maxsplit=1)[0].strip()
+        receipt["candidate"] = candidate
+        if not candidate:
+            raise ValueError("Review's ## Editorial commission section is empty.")
+        # Include actual delivered substance rather than the original queued
+        # topic, which may differ materially after research and editing.
+        coverage = recent.build_recent_context(ctx.done_scripts)[:18000]
+        receipt["coverage_sha256"] = hashlib.sha256(coverage.encode()).hexdigest()
+        if not coverage:
+            receipt.update(result="skipped", reason="No recent generated scripts to compare.")
+            return
+        timeout = cfg.for_stage("dedup").timeout
+
+        prompt = dedup.render_prompt(ctx.prompts / "dedup.md", [candidate], [coverage])
+        response = llm.run_text(
+            prompt, cwd=ctx.root, timeout=180 if timeout is None else timeout,
+            stage="dedup", ledger_path=ctx.ledger_path,
+        )
+        receipt["judge_response"] = response
+        matches = dedup.parse_duplicate_indices(response, 1, [coverage])
+        receipt["matches"] = matches.get(1, [])
+        receipt["result"] = "overlap" if matches else "new"
+        if matches:
+            raise ValueError("Editorial commission may repeat recent narration; inspect commission-screen.json before retrying.")
+    except Exception as exc:
+        receipt["reason"] = f"{type(exc).__name__}: {exc}"
+        raise StageError("review", exc) from exc
+    finally:
+        receipt_path.write_text(json.dumps(receipt, ensure_ascii=False, indent=2) + "\n")
+
+
 def run_stage(stage: Stage, ctx: RunContext, cfg: PipelineConfig, *,
               cli_model: Optional[str] = None, _run: Optional[Callable] = None) -> None:
+    if stage.name in {"script", "script_review", "revise"}:
+        require_episode_approval(ctx)
     sc = cfg.for_stage(stage.name)
     prompt = llm.render_prompt(ctx.prompts / stage.prompt_file, **stage.build_vars(ctx))
     expect = stage.expect_file(ctx)
@@ -258,3 +333,7 @@ def run_stage(stage: Stage, ctx: RunContext, cfg: PipelineConfig, *,
         (ctx.run_dir / f"{stage.name}.state.json").write_text(json.dumps(state) + "\n")
     except Exception as exc:
         raise StageError(stage.name, exc) from exc
+    if stage.name == "review":
+        # Preserve the decision and its input state even when it halts the run.
+        # Explicit retries must recheck a resumed HOLD, not bypass this gate.
+        require_episode_approval(ctx)

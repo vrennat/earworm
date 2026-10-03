@@ -1,7 +1,7 @@
 """`earworm watch` / `earworm render` — the dumb, deterministic renderer.
 
 For each new inbox/scripts/*.md: synthesize audio, tag it with metadata + show
-notes derived from the report, record it in the episodes ledger, and move the
+notes from the script and report, record it in the episodes ledger, and move the
 processed script to done/. No LLM. Idempotent on the script body's content hash.
 
 Produces a tagged local mp3; if the feed is configured, also uploads to R2 and
@@ -70,7 +70,10 @@ def render_preview(script_path: Path, output_dir: Path, engine: Optional[TTSEngi
     mp3, segments, provenance = _synthesize(body, engine, config)
     audio_path.write_bytes(mp3)
     duration = MP3(str(audio_path)).info.length
-    summary, sources = shownotes.extract(Path(meta["report_path"]) if meta.get("report_path") else None)
+    summary, sources = shownotes.extract(
+        Path(meta["report_path"]) if meta.get("report_path") else None,
+        description=meta.get("description"),
+    )
     _tag(audio_path, title=meta.get("title", script_path.stem), date=meta.get("date", ""),
          notes=shownotes.format_notes(summary, sources), duration_sec=duration)
     if segments:
@@ -177,7 +180,9 @@ def render_script_file(
     from mutagen.mp3 import MP3
 
     duration_sec = MP3(str(audio_path)).info.length
-    summary, sources = shownotes.extract(Path(report_path) if report_path else None)
+    summary, sources = shownotes.extract(
+        Path(report_path) if report_path else None, description=meta.get("description"),
+    )
     notes = shownotes.format_notes(summary, sources)
     _tag(audio_path, title=title, date=date, notes=notes, duration_sec=duration_sec)
 

@@ -1,0 +1,19 @@
+{
+  "snapshot_sha256": "ea8e640f71bf863bf3c328f2bda93d78322810be6b47933987b568bbc57488ec",
+  "snapshot_captured_at": "2026-10-03T06:04:43.562975+00:00",
+  "topic_rows": 159,
+  "episode_rows": 141,
+  "coverage_entries": 137,
+  "history_entries": 10,
+  "queue_entries": 1,
+  "discovery_prompt_bytes": 80478,
+  "dedup_prompt_bytes": 58562,
+  "observed_production_input_caps": {
+    "autogen": 160000,
+    "dedup": 100000
+  },
+  "contains_early_cable_episode": true,
+  "contains_early_cuda_episode": true,
+  "unresolved_placeholders": false,
+  "execution": "deterministic snapshot replay; no model calls or queue writes to real databases"
+}

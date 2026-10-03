@@ -76,13 +76,15 @@ def run_one(topic_id: Optional[int] = None, *, model: Optional[str] = None,
         for stage in stages:
             # skip_if_exists stages resume from a prior partial run; script + revise
             # always re-run so a re-queued topic gets a fresh script.
-            if pipeline.can_resume(stage, ctx, cfg, model):
-                continue
-            pipeline.run_stage(stage, ctx, cfg, cli_model=model)
+            if not pipeline.can_resume(stage, ctx, cfg, model):
+                pipeline.run_stage(stage, ctx, cfg, cli_model=model)
+            if stage.name == "review":
+                pipeline.screen_editorial_commission(ctx, cfg)
 
         # Atomically expose the finished (revised) script to the watcher. os.replace
         # is an atomic rename within the filesystem, so `earworm watch` never sees a
         # half-written or pre-revision file.
+        pipeline.require_episode_approval(ctx)
         pipeline.validate_script(ctx.staged_script.read_text(), ctx)
         if stage_for_render:
             os.replace(ctx.staged_script, ctx.script_path)

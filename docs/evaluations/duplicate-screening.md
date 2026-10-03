@@ -79,9 +79,11 @@ PYTHONPATH=src python scripts/eval_dedup.py dataset.json \
 
 ## Limits
 
-The gate still sees the existing recent-coverage window. It cannot reject an old
-story absent from that input, and it does not compare semantic duplicates within
-the newly proposed batch. Both passes use the same model, so errors can correlate.
+The September release evaluated here saw only the recent-coverage window and
+did not compare candidates within a new batch. The October editorial update uses
+the full main-feed archive and screens each archive survivor against earlier
+accepted candidates. The older evaluation below is retained as a historical
+receipt. Both passes use the same model, so errors can correlate.
 A missed shortlist match can still pass through. More independent labeled cases
 and unattended discovery runs are needed before making a general quality claim.
 

@@ -1,7 +1,8 @@
-"""Derive show notes from a report: a short summary plus any listed sources.
+"""Build show notes from final-script coverage and the report's listed sources.
 
-Handles the research-prompt format (`> thesis` + `## Sources` with links) and
-hand-written reports (TL;DR/Summary section, plain-text source/reference lists).
+Falls back to the report summary for older and imported scripts. Handles the
+research-prompt format (`> thesis` + `## Sources` with links) and hand-written
+reports (TL;DR/Summary section, plain-text source/reference lists).
 """
 from __future__ import annotations
 
@@ -97,12 +98,20 @@ def _sources(text: str) -> list[str]:
     return out
 
 
-def extract(report_path: Path | None) -> tuple[str, list[str]]:
-    """Return (summary, sources). Degrades gracefully across report shapes."""
+def extract(report_path: Path | None, *, description: str | None = None) -> tuple[str, list[str]]:
+    """Prefer final-script coverage; keep report sources and legacy fallback.
+
+    Frontmatter supports one-line values, not YAML block scalars. Treat empty or
+    unsupported scalar markers as missing rather than publishing them as prose.
+    """
+    summary = (description or "").strip()
+    if summary.lower() in {"null", "~"} or re.fullmatch(r"[|>][+-]?", summary):
+        summary = ""
+    summary = _cap(_clean(summary))
     if not report_path or not Path(report_path).exists():
-        return "", []
+        return summary, []
     text = Path(report_path).read_text()
-    return _summary(text), _sources(text)
+    return summary or _summary(text), _sources(text)
 
 
 def format_notes(summary: str, sources: list[str]) -> str:

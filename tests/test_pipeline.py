@@ -1,4 +1,5 @@
 """Artifact handoff tests; no model or network calls. Run with Python directly."""
+import json
 import os
 import sys
 import tempfile
@@ -22,6 +23,41 @@ def context(root):
 
 def script(ctx):
     return f"---\ntitle: A test\ndate: {ctx.date}\nreport_path: {ctx.report_path}\n---\n\n" + "A complete spoken sentence. " * 40
+
+
+def review(decision="PROCEED"):
+    return f"EPISODE: {decision}\n\n## Factual review\nVerified evidence.\n\n## Editorial commission\nA supported explanation.\n"
+
+
+def recent_script(root):
+    done = root / "done/scripts"
+    done.mkdir(parents=True, exist_ok=True)
+    (done / "2026-09-04-0002-prior.md").write_text(
+        "---\ntitle: Existing explanation\n---\n\n"
+        "The earlier episode explained the transfer of interconnection rights.\n"
+    )
+
+
+def fake_model(review_text, calls):
+    """Replace only the model boundary; keep orchestration, artifacts and DB real."""
+    def run(prompt, **kwargs):
+        name = kwargs["stage"]
+        calls.append(name)
+        artifact = kwargs["expect_file"]
+        if name in {"script", "revise"}:
+            root = kwargs["cwd"]
+            run_id = artifact.parent.name
+            ctx = pipeline.RunContext(root, root / "prompts", root / "runs", root / "inbox/scripts",
+                                      run_id, "a test topic", run_id[:10], True)
+            text = script(ctx)
+        elif name == "review":
+            text = review_text
+        elif name == "script_review":
+            text = ""
+        else:
+            text = "A complete evidence report with source anchors."
+        artifact.write_text(text)
+    return run
 
 
 def test_toggles_and_model_precedence():
@@ -102,6 +138,7 @@ def test_invalid_script_stops_before_handoff_and_empty_review_succeeds():
     with tempfile.TemporaryDirectory() as tmp:
         ctx = context(Path(tmp))
         cfg = pipeline.PipelineConfig()
+        ctx.review_path.write_text(review())
         def invalid(prompt, **kwargs):
             kwargs["expect_file"].write_text("I have written the script.")
         try:
@@ -128,7 +165,8 @@ def test_private_run_never_enters_watched_inbox_and_failures_stay_failed():
             db.init()
             tid = db.add_topic("Private episode")
             def fake(stage, ctx, cfg, **kwargs):
-                stage.expect_file(ctx).write_text(script(ctx) if stage.name in {"script", "revise"} else "Evidence")
+                text = script(ctx) if stage.name in {"script", "revise"} else review() if stage.name == "review" else "Evidence"
+                stage.expect_file(ctx).write_text(text)
             with patch.object(pipeline, "run_stage", fake):
                 result = runner.run_one(tid, stage_for_render=False)
             assert Path(result["script_path"]).parent.parent == root / "runs"
@@ -149,6 +187,248 @@ def test_private_run_never_enters_watched_inbox_and_failures_stay_failed():
             assert db.get_topic(fail_id)["status"] == "failed"
             assert not list((root / "inbox/scripts").glob("*.md"))
         config.paths.cache_clear()
+
+
+def test_proceed_review_runs_full_pipeline_and_reaches_inbox():
+    with tempfile.TemporaryDirectory() as tmp:
+        root = Path(tmp).resolve()
+        context(root)
+        with patch.dict(os.environ, {"EARWORM_HOME": str(root)}):
+            config.paths.cache_clear()
+            db.init()
+            tid = db.add_topic("A supported episode")
+            calls = []
+            with patch.object(pipeline.llm, "run", fake_model(review(), calls)):
+                result = runner.run_one(tid)
+            assert calls == ["research", "review", "script", "script_review", "revise"]
+            assert Path(result["script_path"]).parent == root / "inbox/scripts"
+            assert Path(result["script_path"]).exists()
+            assert db.get_topic(tid)["status"] == "done"
+        config.paths.cache_clear()
+
+
+def test_hold_and_malformed_reviews_stop_before_writer_even_when_resumed():
+    for review_text in (review("HOLD"), "A legacy review without a decision", review("MAYBE"), "\n" + review()):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp).resolve()
+            context(root)
+            with patch.dict(os.environ, {"EARWORM_HOME": str(root)}):
+                config.paths.cache_clear()
+                db.init()
+                tid = db.add_topic("An uncommissioned episode")
+                calls = []
+                with patch.object(pipeline.llm, "run", fake_model(review_text, calls)):
+                    for _ in range(2):
+                        try:
+                            runner.run_one(tid)
+                        except pipeline.StageError as exc:
+                            assert exc.stage == "review"
+                        else:
+                            raise AssertionError("An unapproved episode reached the writer")
+                        row = db.get_topic(tid)
+                        assert row["status"] == "failed"
+                        assert "review" in row["notes"]
+                        run_dir = root / "runs" / row["run_id"]
+                        assert (run_dir / "report.md").exists()
+                        assert (run_dir / "review.md").read_text() == review_text
+                        assert (run_dir / "review.state.json").exists()
+                        assert not (run_dir / "script.md").exists()
+                        assert not list((root / "inbox/scripts").glob("*.md"))
+                # The explicit retry reused both artifacts and still enforced the
+                # decision. Neither a writer nor an automatic LLM retry ran.
+                assert calls == ["research", "review"]
+            config.paths.cache_clear()
+
+
+def test_review_prompt_migration_reruns_review_before_writing():
+    with tempfile.TemporaryDirectory() as tmp:
+        root = Path(tmp).resolve()
+        context(root)
+        with patch.dict(os.environ, {"EARWORM_HOME": str(root)}):
+            config.paths.cache_clear()
+            db.init()
+            tid = db.add_topic("An episode with a legacy review")
+            calls = []
+            with patch.object(pipeline.llm, "run", fake_model("Legacy review without a decision", calls)):
+                try:
+                    runner.run_one(tid)
+                except pipeline.StageError:
+                    pass
+                else:
+                    raise AssertionError("Legacy review was grandfathered in")
+            prompt = root / "prompts/review.md"
+            prompt.write_text(prompt.read_text() + "\nUpdated local review contract.\n")
+            with patch.object(pipeline.llm, "run", fake_model(review(), calls)):
+                result = runner.run_one(tid)
+            assert calls == ["research", "review", "review", "script", "script_review", "revise"]
+            assert Path(result["script_path"]).exists()
+            assert db.get_topic(tid)["status"] == "done"
+        config.paths.cache_clear()
+
+
+def test_review_disabled_configuration_can_still_complete():
+    with tempfile.TemporaryDirectory() as tmp:
+        root = Path(tmp).resolve()
+        context(root)
+        recent_script(root)
+        (root / "config").mkdir()
+        (root / "config/pipeline.toml").write_text("[pipeline.review]\nenabled = false\n")
+        with patch.dict(os.environ, {"EARWORM_HOME": str(root)}):
+            config.paths.cache_clear()
+            db.init()
+            tid = db.add_topic("An episode with review explicitly disabled")
+            calls = []
+            with patch.object(pipeline.llm, "run", fake_model("Unused", calls)), \
+                    patch.object(pipeline.llm, "run_text", side_effect=AssertionError("Review disabled")):
+                result = runner.run_one(tid)
+            assert calls == ["research", "script", "script_review", "revise"]
+            assert Path(result["script_path"]).exists()
+            assert db.get_topic(tid)["status"] == "done"
+        config.paths.cache_clear()
+
+
+def test_possible_repeat_commission_stops_fresh_and_resumed_runs_before_writer():
+    with tempfile.TemporaryDirectory() as tmp:
+        root = Path(tmp).resolve()
+        context(root)
+        recent_script(root)
+        with patch.dict(os.environ, {"EARWORM_HOME": str(root)}):
+            config.paths.cache_clear()
+            db.init()
+            tid = db.add_topic("A new contract whose review reuses the old story")
+            calls = []
+            shortlist = '{"decisions":[{"n":1,"matches":[1],"reason":"Same transfer"}]}'
+            with patch.object(pipeline.llm, "run", fake_model(review(), calls)), \
+                    patch.object(pipeline.llm, "run_text", side_effect=[shortlist] * 2) as judge:
+                for attempt in range(2):
+                    try:
+                        runner.run_one(tid)
+                    except pipeline.StageError as exc:
+                        assert exc.stage == "review"
+                        assert "may repeat recent narration" in str(exc)
+                    else:
+                        raise AssertionError("A repeated commissioned story reached the writer")
+                    row = db.get_topic(tid)
+                    assert row["status"] == "failed"
+                    run_dir = root / "runs" / row["run_id"]
+                    receipt = json.loads((run_dir / "commission-screen.json").read_text())
+                    assert receipt["candidate"] == "A supported explanation."
+                    assert receipt["result"] == "overlap"
+                    assert "transfer of interconnection rights" in receipt["matches"][0]
+                    assert json.loads(receipt["judge_response"])["decisions"][0]["reason"] == "Same transfer"
+                    assert (run_dir / "review.md").read_text() == review()
+                    assert (run_dir / "review.state.json").exists()
+                    assert not (run_dir / "script.md").exists()
+                    assert not list((root / "inbox/scripts").glob("*.md"))
+                    assert judge.call_count == attempt + 1
+                assert calls == ["research", "review"]
+            for call in judge.call_args_list:
+                assert call.kwargs == {
+                    "cwd": root, "timeout": 180, "stage": "dedup",
+                    "ledger_path": run_dir / "usage.jsonl",
+                }
+        config.paths.cache_clear()
+
+
+def test_distinct_commission_proceeds_with_configured_timeout_and_route():
+    with tempfile.TemporaryDirectory() as tmp:
+        root = Path(tmp).resolve()
+        context(root)
+        recent_script(root)
+        (root / "config").mkdir()
+        (root / "config/pipeline.toml").write_text("[pipeline.dedup]\ntimeout = 27\n")
+        with patch.dict(os.environ, {"EARWORM_HOME": str(root)}):
+            config.paths.cache_clear()
+            db.init()
+            tid = db.add_topic("A distinct explanation")
+            calls = []
+            with patch.object(pipeline.llm, "run", fake_model(review(), calls)), \
+                    patch.object(pipeline.llm, "run_text", return_value=
+                                      '{"decisions":[{"n":1,"matches":[],"reason":"Different mechanism"}]}') as judge:
+                result = runner.run_one(tid, model="explicit-writing-model")
+            assert calls == ["research", "review", "script", "script_review", "revise"]
+            assert judge.call_count == 1
+            assert "model" not in judge.call_args.kwargs
+            assert judge.call_args.kwargs["timeout"] == 27
+            assert "transfer of interconnection rights" in judge.call_args.args[0]
+            receipt = json.loads((root / "runs" / result["run_id"] / "commission-screen.json").read_text())
+            assert receipt["result"] == "new"
+            assert Path(result["script_path"]).exists()
+            assert db.get_topic(tid)["status"] == "done"
+        config.paths.cache_clear()
+
+
+def test_commission_judge_errors_stop_before_writer_and_preserve_diagnostics():
+    for failure in ("not valid JSON", RuntimeError("Judge route unavailable")):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp).resolve()
+            context(root)
+            recent_script(root)
+            with patch.dict(os.environ, {"EARWORM_HOME": str(root)}):
+                config.paths.cache_clear()
+                db.init()
+                tid = db.add_topic("A potentially new explanation")
+                calls = []
+                response = {"side_effect": failure} if isinstance(failure, Exception) else {"return_value": failure}
+                with patch.object(pipeline.llm, "run", fake_model(review(), calls)), \
+                        patch.object(pipeline.llm, "run_text", **response):
+                    try:
+                        runner.run_one(tid)
+                    except pipeline.StageError as exc:
+                        assert exc.stage == "review"
+                    else:
+                        raise AssertionError("A judge failure bypassed commission screening")
+                row = db.get_topic(tid)
+                run_dir = root / "runs" / row["run_id"]
+                receipt = json.loads((run_dir / "commission-screen.json").read_text())
+                assert receipt["result"] == "error"
+                assert receipt["reason"]
+                assert (run_dir / "review.md").read_text() == review()
+                assert row["status"] == "failed"
+                assert calls == ["research", "review"]
+                assert not list((root / "inbox/scripts").glob("*.md"))
+            config.paths.cache_clear()
+
+
+def test_missing_or_empty_commission_stops_before_writer_without_judge():
+    for review_text in (
+        "EPISODE: PROCEED\n\nFactual checks passed.",
+        "EPISODE: PROCEED\n\n## Editorial commission\n\n## Notes\nAn unrelated note.",
+        review() + "\n## Editorial commission\nAnother commission.\n",
+    ):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp).resolve()
+            context(root)
+            with patch.dict(os.environ, {"EARWORM_HOME": str(root)}):
+                config.paths.cache_clear()
+                db.init()
+                tid = db.add_topic("An episode without a usable commission")
+                calls = []
+                with patch.object(pipeline.llm, "run", fake_model(review_text, calls)), \
+                        patch.object(pipeline.llm, "run_text", side_effect=AssertionError("No usable commission")):
+                    try:
+                        runner.run_one(tid)
+                    except pipeline.StageError as exc:
+                        assert exc.stage == "review"
+                        assert "commission" in str(exc)
+                    else:
+                        raise AssertionError("A missing commission reached the writer")
+                row = db.get_topic(tid)
+                assert row["status"] == "failed"
+                assert calls == ["research", "review"]
+                assert not list((root / "inbox/scripts").glob("*.md"))
+            config.paths.cache_clear()
+
+
+def test_commission_without_recent_scripts_skips_judge_and_records_reason():
+    with tempfile.TemporaryDirectory() as tmp:
+        ctx = context(Path(tmp))
+        ctx.review_path.write_text(review())
+        with patch.object(pipeline.llm, "run_text", side_effect=AssertionError("No recent scripts")):
+            pipeline.screen_editorial_commission(ctx, pipeline.PipelineConfig())
+        receipt = json.loads((ctx.run_dir / "commission-screen.json").read_text())
+        assert receipt["result"] == "skipped"
+        assert receipt["candidate"] == "A supported explanation."
 
 
 if __name__ == "__main__":

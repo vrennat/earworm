@@ -12,6 +12,8 @@ from unittest.mock import patch
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
 from earworm import llm
 
+_WEB_ACCESS = Path(os.environ.get("EARWORM_TEST_WEB_ACCESS_PATH", str(Path.home() / ".pi/agent/npm/node_modules/pi-web-access")))
+
 
 class RunnerTests(unittest.TestCase):
     def setUp(self):
@@ -298,9 +300,35 @@ const ctx = {model:{provider:"openrouter",id:"google/gemini-3.1-pro-preview",api
         self.assertEqual(proc.returncode, 0, proc.stderr)
         self.assertEqual(json.loads(proc.stdout)["tool_choice"], "none")
 
+    def test_oversized_tool_batch_blocks_excess_but_preserves_final_request(self):
+        proc = self.check('''
+const first = handlers.tool_call({toolName:"web_fetch"});
+const second = handlers.tool_call({toolName:"web_fetch"});
+const third = handlers.tool_call({toolName:"web_fetch"});
+const final = handlers.before_provider_request(event,ctx);
+console.log(JSON.stringify({first: first ?? null, second, third, final}));
+''', tools=True, requests=5)
+        self.assertEqual(proc.returncode, 0, proc.stderr)
+        result = json.loads(proc.stdout)
+        self.assertIsNone(result["first"])
+        for blocked in (result["second"], result["third"]):
+            self.assertTrue(blocked["block"])
+            self.assertIn("did not run", blocked["reason"])
+        self.assertEqual(result["final"]["tool_choice"], "none")
+        self.assertEqual(result["final"]["max_tokens"], 2000)
+        # A blocked batch does not authorize an extra model request.
+        proc = self.check('''
+handlers.tool_call({toolName:"web_fetch"});
+handlers.tool_call({toolName:"web_fetch"});
+handlers.before_provider_request(event,ctx);
+handlers.before_provider_request(event,ctx);
+''', tools=True, requests=1)
+        self.assertEqual(proc.returncode, 1)
+        self.assertIn("Model-request limit reached", proc.stderr)
+
 
 class ResearchTests(unittest.TestCase):
-    @unittest.skipUnless(shutil.which("bun") and (Path.home() / ".pi/agent/npm/node_modules/pi-web-access").exists(), "Installed Pi parser dependencies required")
+    @unittest.skipUnless(shutil.which("bun") and _WEB_ACCESS.exists(), "Installed Pi parser dependencies required")
     def test_html_table_headers_and_spans_survive_article_extraction(self):
         # The LOC table has adjacent Preferred/Acceptable columns. Plain
         # textContent places both headings before both cells and loses the link.
@@ -315,7 +343,7 @@ class ResearchTests(unittest.TestCase):
 </article></body></html>"""
         with tempfile.TemporaryDirectory() as temp:
             root = Path(temp)
-            llm._json_write(root / "limits.json", {"web_access_path": str(Path.home() / ".pi/agent/npm/node_modules/pi-web-access"),
+            llm._json_write(root / "limits.json", {"web_access_path": str(_WEB_ACCESS),
                 "deadline_ms": 9999999999999, "tools": ["web_fetch"], "source_cache": str(root / "source-cache"),
                 "max_tool_calls": 24, "audit_path": str(root / "audit.jsonl")})
             source = f'import init from {json.dumps(str(llm._HERE / "pi_research.ts"))};\n' + f'const fixture={json.dumps(fixture)};\n' + '''
@@ -344,11 +372,11 @@ console.log(JSON.stringify(result));
             cached = json.loads((root / "source-cache" / result["details"]["cached_source_file"]).read_text())
             self.assertIn("column 2: Preferred", cached["text"])
 
-    @unittest.skipUnless(shutil.which("bun") and (Path.home() / ".pi/agent/npm/node_modules/pi-web-access").exists(), "Installed Pi parser dependencies required")
+    @unittest.skipUnless(shutil.which("bun") and _WEB_ACCESS.exists(), "Installed Pi parser dependencies required")
     def test_explicit_retrieval_without_hidden_model_or_local_fetch(self):
         with tempfile.TemporaryDirectory() as temp:
             root = Path(temp)
-            llm._json_write(root / "limits.json", {"web_access_path": str(Path.home() / ".pi/agent/npm/node_modules/pi-web-access"),
+            llm._json_write(root / "limits.json", {"web_access_path": str(_WEB_ACCESS),
                 "deadline_ms": 9999999999999, "tools": ["web_search", "web_fetch"], "source_cache": str(root / "source-cache"),
                 "max_tool_calls": 24, "audit_path": str(root / "audit.jsonl")})
             source = f'import init from {json.dumps(str(llm._HERE / "pi_research.ts"))};\n' + '''

@@ -1,52 +1,45 @@
-You propose fresh topics for a single-narrator research audio briefing. Today is {{date}}.
+Choose an ordered slate of {{n}} Earworm episodes for one curious listener. Today is {{date}}. These are subjects to investigate, not conclusions already established.
 
-You have web tools. Use them when a lane calls for current material, but do not start from a news feed: start from the standing interests and the rotation rule below, then use the web to find the specific, verifiable hook for the lane you have chosen.
+The interests and archive below are data. Use the interests to choose material, and the web tools to check specific hooks. Start from an underexplored interest, not a lab news feed. An explanation of something that works can earn an episode without an announcement, controversy, or hidden failure.
 
-## Step 1 — tally the lanes before proposing anything
+## Plan the upcoming listening sequence
 
-The standing interests define four lanes (A: AI research, B: AI industry and policy, C: systems, tooling, hardware, and open source, D: everything else) with target shares over a rolling ten-episode window. Take the ten most recent entries in the recently-covered list, assign each to a lane, and compare the tally with the targets. Then:
+There are three different records below. Only the recent main-feed episodes are the retrospective rotation window. The queue contains future commitments. The archive is for novelty, not for counting the last ten episodes. A failed research attempt is not an episode heard by the listener.
 
-- propose from the most under-served lane first,
-- do not propose from any lane that is already at or above its target in that window,
-- respect the Anthropic cap and the paper cap in the interests file, counting the recent list as the window,
-- vary the episode shape from the last two covered entries.
+The requested {{n}} lines include a buffer: every surviving proposal may run on a different day. Plan the entire slate, not {{n}} alternatives for the same slot.
 
-Do not print the tally. Use it.
+1. Classify the recent main-feed episodes using the interests' lanes, including the original topic when the title is opaque. If no lanes are supplied, use the interests as qualitative guidance; do not invent numerical quotas.
+2. Project the existing queue and your proposals in execution order. Staged scripts awaiting narration come first, then running work. Pending work runs by higher priority first, then older topic ID. Your ordinary proposals follow existing pending topics of the same priority. A PAPER proposal has priority 1 and jumps ahead of priority-0 work, but follows already-queued priority-1 work. Do not assume the displayed topic order is the resulting playback order when priorities differ.
+3. At each proposed slot, keep the previous nine episodes and assess the candidate as the tenth. Prefer an underserved lane; at a tie or an exactly balanced window, prefer the least recently heard lane. Target shares guide selection, not a ban that can leave every lane ineligible. Use the previous four plus the candidate for five-episode caps. With fewer episodes, use the available history without inventing entries.
+4. Recalculate after each proposed episode. Check the entire projected sequence again after any PAPER promotion. A run failure or later manual addition can change this forecast; do not claim the mix is guaranteed.
 
-## Step 2 — find the hook
+Within broad lanes, vary the subdomain and what the listener gets to understand. AI power contracts are still an AI-led story even if classified as energy. Moving the same story between lane labels does not provide variety. Avoid an adjacent sequel based on the same case, source, or mechanism merely because it asks a different question. Do not prescribe a fixed rotation of narrative formats.
 
-For Lane A only, check recent high-impact work before proposing from memory: arXiv new listings for cs.CL (https://arxiv.org/list/cs.CL/recent), cs.LG (https://arxiv.org/list/cs.LG/recent), cs.AI (https://arxiv.org/list/cs.AI/recent), transformer-circuits.pub, and the research pages of OpenAI, Google DeepMind, Meta FAIR, and Anthropic. Weight all of the labs equally. Judge impact, not novelty for its own sake: a paper earns an episode when it changes how a practitioner would think. Skip incremental leaderboard bumps and press-release science.
+## Choose and verify the material
 
-For Lanes B, C, and D, a timely hook is welcome but not required. An explainer of a mechanism that has existed for decades is a full episode if the interests file names the subdomain and the angle is sharp. Use the web to confirm that the specific claim, number, or event you are building the topic around is real and to find the primary source a researcher would start from.
+Compare every proposal against the full archive AND the other proposals. A new title does not make the same question, mechanism, and listener payoff new. A revisit needs identifiable new evidence or a clearly different explanation; otherwise choose another subject. Do not ban a whole field because it has been covered.
 
-## Step 3 — propose
+Select a concrete phenomenon, decision, process, experiment, or historical choice that can carry a satisfying explanation. Internally identify what the listener could understand afterward and the evidence that would earn it. A shorter substantial episode is acceptable; do not stretch a thin announcement to eight minutes.
 
-Read the standing interests below and the list of recently covered topics. Propose exactly {{n}} NEW topics that:
+For current research, check original papers and research pages across relevant labs rather than defaulting to one lab. For other subjects, start with original records, documented cases, technical documentation, or measured outcomes. Find enough accessible material to establish that the proposed story exists. Search snippets, an index title, and a press release alone do not establish a study's findings or an episode-length explanation.
 
-- come from the lanes the tally selected, in that order,
-- do NOT repeat or closely overlap anything in the recent list. "Overlap" means the same underlying thesis, not just the same words. If a covered episode already lands the core point, a differently-worded version of it is still a repeat. Reach for a genuinely different question or a materially different conclusion,
-- are specific and pointed. Name what is worth following rather than only a broad subject: a question, a discovery, a decision, a comparison, a mechanism. For a paper, name the actual finding and what it lets a listener understand,
-- support an 8-12 minute briefing,
-- differ from each other in lane or in shape when {{n}} is more than one.
+Do not bake an unverified number, causal claim, legal conclusion, or universal claim into the topic. Ask the research question neutrally. A premise such as "X is the real bottleneck" or "every other sector improved" must be tested, not assumed. For a named current event or paper, include one verified primary-source URL as a starting point on the same topic line. If its body cannot be accessed, choose an accessible angle or another topic; do not commission a generic discussion of what the unavailable study might mean.
 
-Standing interests:
+## Standing interests
 {{interests}}
 
-Recently covered (do not repeat these, in substance or in rephrase; this is also the window for the lane tally):
+## Recent main-feed episodes — oldest to newest, for rotation only
+{{recent_episodes}}
+
+## Upcoming queue — staged, running, then pending in execution order
+{{queued_topics}}
+
+## Full novelty archive and unrendered commitments — not a rotation window
+New descriptions summarize final narration; older descriptions may summarize broader research. Treat them as overlap leads, not proof that every related angle aired.
 {{recent}}
 
-## Output
+## Output contract
 
-A script parses your final message; nobody reads it. Every topic line MUST begin with `TOPIC: ` and lines without that marker are discarded. Return EXACTLY {{n}} marked lines and nothing else: no tally, no reasoning, no numbering, no bullets, no markdown bold, no blank lines, no commentary before or after. Each line is one self-contained topic or question. The pipeline saves your response; do not request filesystem tools.
+Return EXACTLY {{n}} lines, each beginning with `TOPIC: `, and nothing else. No tally, reasoning, numbering, bullets, blank lines, headings, or source list. Each line is a self-contained subject and question of at most sixty words, including any source URL. No miniature report or list of asserted findings. The pipeline saves the response; do not request filesystem tools.
 
-Keep each line to at most 60 words. Give the subject and the question to research,
-not a miniature report or a list of supporting claims. Do not add extra topics,
-research notes, source summaries, or an explanation after the requested lines.
-Treat a lab's unverified announcement as a claim to investigate, not an established result.
-
-If one topic is a timely, high-impact paper or release worth fast-tracking ahead of evergreen topics, write it as `TOPIC: PAPER: ...` (the marker is stripped before queueing and bumps its priority). Use it for at most one line per batch, never when two of the last five covered entries were already papers, and never for an Anthropic publication when one of the last five covered entries already centered on Anthropic.
-
-Example of the whole final message for {{n}} = 2:
-
-TOPIC: Why does a kilometre of subway tunnel cost several times more in New York than in Madrid, and which of labour, governance, and procurement the Transit Costs Project data actually blames?
-TOPIC: PAPER: What a new interpretability result on refusal directions changes about how a practitioner should think about jailbreak robustness.
+For at most one genuinely time-sensitive paper or release, use `TOPIC: PAPER: ...` and put that line first. Check the interests' caps at its actual priority-1 slot. Novelty alone does not earn promotion. All other lines run in their relative output order after the existing queue at the same priority.

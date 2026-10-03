@@ -116,6 +116,7 @@ def generate(count: int = 3, model: str | None = None, *, use_sources: bool = Tr
         n=str(pool),
         interests=interests.strip() or "(no interests file)",
         recent="\n".join(f"- {t}" for t in coverage) or "(nothing yet)",
+        **db.discovery_context(),
     )
 
     # The backend owns the discovery route and any bounded transport fallback.

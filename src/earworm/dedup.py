@@ -96,22 +96,18 @@ def parse_duplicate_indices(text: str, n: int, covered: list[str]) -> dict[int, 
     return result
 
 
-def filter_new(
+def _find_duplicates(
     candidates: list[str], covered: list[str], *, judge: Callable[[str], str],
     prompt_path: Path,
-) -> tuple[list[str], list[Duplicate]]:
-    """Return kept/dropped topics; both calls must succeed before anything queues.
-
-    An empty archive is a no-op. Confirmation runs only when retrieval suggests
-    matches, and keeps ambiguous/adjacent pairs. Model or schema errors propagate.
-    """
+) -> dict[int, Duplicate]:
+    """Shortlist and confirm against one fixed coverage set, at most two calls."""
     if not candidates or not covered:
-        return list(candidates), []
+        return {}
     matches = parse_duplicate_indices(
         judge(render_prompt(prompt_path, candidates, covered)), len(candidates), covered
     )
     if not matches:
-        return list(candidates), []
+        return {}
     # Keep the pair-to-proposal mapping outside model output. A weak first match
     # must not hide a real duplicate appearing later in the shortlist.
     references = [(n, match) for n, options in sorted(matches.items()) for match in options]
@@ -128,5 +124,29 @@ def filter_new(
         if item["duplicate"]:
             n, match = references[pair_id - 1]
             confirmed.setdefault(n, Duplicate(candidates[n - 1], f"{match} — {item['reason'].strip()}"))
-    return ([c for i, c in enumerate(candidates, 1) if i not in confirmed],
-            [confirmed[i] for i in sorted(confirmed)])
+    return confirmed
+
+
+def filter_new(
+    candidates: list[str], covered: list[str], *, judge: Callable[[str], str],
+    prompt_path: Path,
+) -> tuple[list[str], list[Duplicate]]:
+    """Screen archive, then earlier accepted proposals, before anything queues.
+
+    Keep input order: the first novel proposal wins a confirmed batch duplicate.
+    Never use a dropped proposal to reject a later one. Ambiguous/adjacent pairs
+    stay; model or schema errors abort the whole batch, including with no archive.
+    At most 2N judge calls for N candidates; archive input is sent only once and
+    subsequent comparisons reuse the caller's bounded judge and shared ledger.
+    """
+    confirmed = _find_duplicates(candidates, covered, judge=judge, prompt_path=prompt_path)
+    kept: list[str] = []
+    for n, candidate in enumerate(candidates, 1):
+        if n in confirmed:
+            continue
+        batch_match = _find_duplicates([candidate], kept, judge=judge, prompt_path=prompt_path)
+        if batch_match:
+            confirmed[n] = batch_match[1]
+        else:
+            kept.append(candidate)
+    return kept, [confirmed[n] for n in sorted(confirmed)]

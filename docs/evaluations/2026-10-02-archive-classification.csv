@@ -1,0 +1,142 @@
+id,topic_id,title,date,published_at,classification,reason
+1,1,JWST and the Black Holes That Came Too Soon,2026-06-09,2026-06-10T06:37:41+00:00,other,Astronomy; early-universe observation.
+2,2,Why Do Songs Get Stuck in Our Heads? The Science of Earworms,2026-06-10,2026-06-10T10:25:41+00:00,other,Music and human cognition.
+3,3,"Your Anthropic Recruiter Screen, The Final Pep Talk",2026-06-11,2026-06-11T08:17:30+00:00,personal,Personal Anthropic interview preparation; excluded from original-editorial denominator.
+4,4,"When Thinking Gets Cheap, Who Pockets the Difference?",2026-06-12,2026-06-12T22:57:34+00:00,AI-led,"AI capability, evaluation, deployment, economics, policy, or infrastructure is the central subject."
+5,5,The Federation You Can't Switch Off,2026-06-13,2026-06-13T20:04:14+00:00,other,Internet federation and protocol survival; AI is not the central subject.
+6,,On DeepSeek and Export Controls,2026-06-14,2026-06-14T10:32:27+00:00,imported_reading,Imported AI-related source reading; excluded from original-editorial denominator.
+7,,Machines of Loving Grace,2026-06-14,2026-06-14T10:37:12+00:00,imported_reading,Imported AI-related source reading; excluded from original-editorial denominator.
+8,,Policy on the AI Exponential,2026-06-14,2026-06-14T10:32:40+00:00,imported_reading,Imported AI-related source reading; excluded from original-editorial denominator.
+9,,The Adolescence of Technology,2026-06-14,2026-06-14T10:37:27+00:00,imported_reading,Imported AI-related source reading; excluded from original-editorial denominator.
+10,,The Urgency of Interpretability,2026-06-14,2026-06-14T10:32:57+00:00,imported_reading,Imported AI-related source reading; excluded from original-editorial denominator.
+11,6,How to Build an Institution That Outlives You,2026-06-14,2026-06-14T14:24:54+00:00,other,Institutional longevity and governance.
+12,7,When Owning Beats Renting: The Cloud Bill That Couldn't Survive a Law,2026-06-15,2026-06-15T14:20:46+00:00,other,Cloud ownership economics; not an AI episode.
+13,8,The Warning We Can't Write,2026-06-16,2026-06-16T14:18:24+00:00,other,Nuclear-waste communication over deep time.
+14,9,The Truth Machine Has a Cash-Flow Problem,2026-06-17,2026-06-17T14:17:55+00:00,other,Prediction-market incentives.
+15,10,The Cord Was Load-Bearing,2026-06-18,2026-06-18T14:32:13+00:00,other,Local-first software and synchronization.
+16,11,The Part Nobody Wrote Down,2026-06-19,2026-06-19T14:25:59+00:00,other,Loss and preservation of practical knowledge.
+17,13,The Faintest Signal Holding Everything Together,2026-06-24,2026-06-25T06:01:24+00:00,other,GPS and precision timing.
+18,14,Working as Designed: Why Science Publishing Stays Broken,2026-06-25,2026-06-25T14:17:31+00:00,other,Scientific publishing economics.
+19,15,Does AI Eat Itself?,2026-06-26,2026-06-26T14:16:41+00:00,AI-led,"AI capability, evaluation, deployment, economics, policy, or infrastructure is the central subject."
+20,16,The Cables Are Fine. The Ships That Fix Them Aren't.,2026-06-27,2026-06-27T14:17:07+00:00,other,Undersea cable maintenance and ownership.
+21,17,The Insurance Signal Nobody Feels Yet,2026-06-28,2026-06-28T14:16:23+00:00,other,Property insurance and climate risk.
+22,18,The Orbital Commons Is Failing in Slow Motion,2026-06-29,2026-06-29T14:18:28+00:00,other,Orbital debris and shared-resource governance.
+26,22,Can You Trust a Machine That Shows Its Work?,2026-06-30,2026-06-30T14:27:18+00:00,AI-led,"AI capability, evaluation, deployment, economics, policy, or infrastructure is the central subject."
+27,23,The Two-Year-Old Loophole That's Already Leaking,2026-06-30,2026-06-30T14:44:27+00:00,AI-led,"AI capability, evaluation, deployment, economics, policy, or infrastructure is the central subject."
+28,24,The Kilogram That Couldn't Lose Weight,2026-06-30,2026-06-30T15:00:08+00:00,other,Metrology and the kilogram.
+32,28,The Bottleneck That Keeps Moving,2026-06-30,2026-07-01T00:24:52+00:00,AI-led,"AI compute infrastructure or its economics; classified AI-led even though the mechanism is hardware, energy, or tooling."
+33,29,The Last Human in the Chair,2026-06-30,2026-07-01T00:33:54+00:00,AI-led,"AI capability, evaluation, deployment, economics, policy, or infrastructure is the central subject."
+34,30,The Blackout That Wasn't About Inertia,2026-06-30,2026-07-01T00:56:47+00:00,other,Electrical-grid stability; not framed around AI demand.
+35,31,What It Actually Takes to Beat NVIDIA,2026-07-01,2026-07-01T14:21:42+00:00,AI-led,"AI compute infrastructure or its economics; classified AI-led even though the mechanism is hardware, energy, or tooling."
+36,32,We're Handing AI Agents the Power to Act. Liability Law Is About to Hand It Back.,2026-07-01,2026-07-01T14:39:10+00:00,AI-led,"AI capability, evaluation, deployment, economics, policy, or infrastructure is the central subject."
+37,33,Bits Don't Rot. The Rest Is the Problem.,2026-07-01,2026-07-01T15:04:56+00:00,other,Digital preservation.
+38,34,"Payment Required, but the Door Doesn't Lock",2026-07-02,2026-07-02T14:27:11+00:00,AI-led,"AI capability, evaluation, deployment, economics, policy, or infrastructure is the central subject."
+39,35,The Exam That Flunked the Examiners,2026-07-02,2026-07-02T14:54:38+00:00,AI-led,"AI capability, evaluation, deployment, economics, policy, or infrastructure is the central subject."
+40,36,Twenty Cents for the Only Thing Earth Never Gets Back,2026-07-02,2026-07-02T15:18:01+00:00,other,Helium supply and conservation.
+41,37,"Same Silicon, Opposite Books",2026-07-03,2026-07-03T14:37:19+00:00,AI-led,"AI compute infrastructure or its economics; classified AI-led even though the mechanism is hardware, energy, or tooling."
+42,38,The Frozen Model Starts to Thaw,2026-07-03,2026-07-03T15:02:29+00:00,AI-led,"AI capability, evaluation, deployment, economics, policy, or infrastructure is the central subject."
+43,39,The Asteroid All-Clear We Didn't Earn,2026-07-03,2026-07-03T15:27:30+00:00,other,Asteroid risk assessment.
+44,40,"Paid to Fold Laundry, the Hundred-Thousand-Year Robot Data Gap",2026-07-04,2026-07-04T14:21:38+00:00,AI-led,"AI capability, evaluation, deployment, economics, policy, or infrastructure is the central subject."
+45,41,Who Actually Writes the Rules for AI?,2026-07-04,2026-07-04T14:42:27+00:00,AI-led,"AI capability, evaluation, deployment, economics, policy, or infrastructure is the central subject."
+46,42,The Machine and the Coin Flip,2026-07-04,2026-07-04T15:14:06+00:00,other,Ozone protection and collective action.
+47,43,"The Short, Happy Life of Unlimited AI",2026-07-05,2026-07-05T14:21:04+00:00,AI-led,"AI capability, evaluation, deployment, economics, policy, or infrastructure is the central subject."
+48,44,The Bug That Gets Worse as Models Get Smarter,2026-07-05,2026-07-05T14:39:45+00:00,AI-led,"AI capability, evaluation, deployment, economics, policy, or infrastructure is the central subject."
+49,45,The Wall Made of Flies,2026-07-05,2026-07-05T15:09:03+00:00,other,Screwworm control and sterile-insect logistics.
+50,46,The Going Rate for a Mission Lock,2026-07-06,2026-07-06T14:39:57+00:00,AI-led,"AI capability, evaluation, deployment, economics, policy, or infrastructure is the central subject."
+51,47,Why AI's Worst Hack Keeps Winning,2026-07-06,2026-07-06T15:01:36+00:00,AI-led,"AI capability, evaluation, deployment, economics, policy, or infrastructure is the central subject."
+52,49,Interpretability Scales Backward,2026-07-07,2026-07-26T19:15:54+00:00,AI-led,"AI capability, evaluation, deployment, economics, policy, or infrastructure is the central subject."
+53,50,"The Model Is Free, Everything Else Isn't",2026-07-07,2026-07-07T14:46:30+00:00,AI-led,"AI capability, evaluation, deployment, economics, policy, or infrastructure is the central subject."
+55,52,The Watt Ceiling,2026-07-08,2026-07-08T14:19:53+00:00,AI-led,"AI compute infrastructure or its economics; classified AI-led even though the mechanism is hardware, energy, or tooling."
+56,53,How AI Labs Learned to Ration Their Own Thinking,2026-07-08,2026-07-08T14:46:40+00:00,AI-led,"AI capability, evaluation, deployment, economics, policy, or infrastructure is the central subject."
+57,54,Money Doesn't Save Expertise. It Re-Invents It.,2026-07-08,2026-07-08T15:05:32+00:00,other,Expertise transfer in general; AI appears in sources but is not the central listener question.
+58,55,The Objection Claude Never Voiced,2026-07-09,2026-07-09T14:32:23+00:00,AI-led,"AI capability, evaluation, deployment, economics, policy, or infrastructure is the central subject."
+59,56,The Weights You Can't Take Back,2026-07-09,2026-07-09T14:50:18+00:00,AI-led,"AI capability, evaluation, deployment, economics, policy, or infrastructure is the central subject."
+60,58,"The Four-Bit Rule, and How It Broke",2026-07-10,2026-07-10T14:26:33+00:00,AI-led,"AI capability, evaluation, deployment, economics, policy, or infrastructure is the central subject."
+61,57,"The GLP-1 Paradox, It Was Never About the Weight Loss",2026-07-10,2026-07-10T14:52:44+00:00,other,GLP-1 clinical outcomes.
+62,59,The Deference Trap,2026-07-10,2026-07-10T15:12:38+00:00,AI-led,"AI capability, evaluation, deployment, economics, policy, or infrastructure is the central subject."
+63,60,"Midnight, Minus One Second",2026-07-11,2026-07-11T14:23:33+00:00,other,Leap seconds and Earth rotation.
+64,66,Claude Science and the Vanishing Apprenticeship,2026-07-12,2026-07-12T14:30:01+00:00,AI-led,"AI capability, evaluation, deployment, economics, policy, or infrastructure is the central subject."
+65,67,The Workbench Wager,2026-07-12,2026-07-12T14:54:35+00:00,AI-led,"AI capability, evaluation, deployment, economics, policy, or infrastructure is the central subject."
+66,68,"Quarantine, Not Erase: The Two-Year Path to an AI Off Switch",2026-07-12,2026-07-12T15:09:11+00:00,AI-led,"AI capability, evaluation, deployment, economics, policy, or infrastructure is the central subject."
+67,71,Grading the Grader,2026-07-13,2026-07-13T14:34:36+00:00,AI-led,"AI capability, evaluation, deployment, economics, policy, or infrastructure is the central subject."
+68,69,"Anthropic Didn't Find Consciousness, It Found a Tell",2026-07-13,2026-07-13T14:56:16+00:00,AI-led,"AI capability, evaluation, deployment, economics, policy, or infrastructure is the central subject."
+69,70,The Same Lab That Killed Embryo Editing Just Reopened It,2026-07-13,2026-07-13T15:22:43+00:00,other,Embryo editing.
+70,73,"The Rise, the Reckoning, and the Quiet Retreat of Diffusion Language Models",2026-07-14,2026-07-14T14:31:30+00:00,AI-led,"AI capability, evaluation, deployment, economics, policy, or infrastructure is the central subject."
+71,72,The One AI Nightmare That Actually Held Up,2026-07-14,2026-07-14T14:55:16+00:00,AI-led,"AI capability, evaluation, deployment, economics, policy, or infrastructure is the central subject."
+72,74,"ICML 2026: Diffusion Took the Trophy, Reinforcement Learning Wrote the Paper",2026-07-14,2026-07-26T19:16:01+00:00,AI-led,"AI capability, evaluation, deployment, economics, policy, or infrastructure is the central subject."
+73,75,The Meltdown Behind ICML's Boldest Prize,2026-07-15,2026-07-15T14:24:35+00:00,AI-led,"AI capability, evaluation, deployment, economics, policy, or infrastructure is the central subject."
+74,76,Google Is Losing Its Superstars. Does It Actually Matter?,2026-07-15,2026-07-15T14:42:31+00:00,AI-led,"AI capability, evaluation, deployment, economics, policy, or infrastructure is the central subject."
+75,77,"Google's AI Brain Drain, Crisis or Noise",2026-07-15,2026-07-15T15:00:02+00:00,AI-led,"AI capability, evaluation, deployment, economics, policy, or infrastructure is the central subject."
+76,79,The Ladder With a Rung Missing,2026-07-16,2026-07-16T14:23:05+00:00,AI-led,"AI capability, evaluation, deployment, economics, policy, or infrastructure is the central subject."
+77,80,Claude's Values at the Deployment Edge,2026-07-16,2026-07-16T14:39:40+00:00,AI-led,"AI capability, evaluation, deployment, economics, policy, or infrastructure is the central subject."
+78,78,Making It Up As They Go,2026-07-16,2026-07-16T15:04:00+00:00,AI-led,"AI capability, evaluation, deployment, economics, policy, or infrastructure is the central subject."
+79,82,The Judge Only the Lab Can See,2026-07-17,2026-07-17T14:34:05+00:00,AI-led,"AI capability, evaluation, deployment, economics, policy, or infrastructure is the central subject."
+80,81,Is This Actually the Pancreatic Cancer Breakthrough It Sounds Like?,2026-07-17,2026-07-17T15:13:26+00:00,other,Pancreatic cancer treatment.
+81,83,"How Robotics Learned to Scale Like LLMs, and Hit a Wall Nobody's Watching",2026-07-17,2026-07-17T15:37:29+00:00,AI-led,"AI capability, evaluation, deployment, economics, policy, or infrastructure is the central subject."
+82,84,Putting Words in Its Mouth,2026-07-18,2026-07-18T14:26:34+00:00,AI-led,"AI capability, evaluation, deployment, economics, policy, or infrastructure is the central subject."
+83,85,The Push That Wouldn't Compute,2026-07-18,2026-07-18T14:45:57+00:00,AI-led,"AI capability, evaluation, deployment, economics, policy, or infrastructure is the central subject."
+84,86,The Split Price of Intelligence,2026-07-18,2026-07-18T15:09:29+00:00,AI-led,"AI capability, evaluation, deployment, economics, policy, or infrastructure is the central subject."
+85,88,The Reliability Ceiling,2026-07-19,2026-07-19T14:36:06+00:00,AI-led,"AI capability, evaluation, deployment, economics, policy, or infrastructure is the central subject."
+86,87,The Neurodivergent Penalty,2026-07-19,2026-07-19T15:15:14+00:00,AI-led,"AI capability, evaluation, deployment, economics, policy, or infrastructure is the central subject."
+87,89,The Off Switch Is a Dial,2026-07-20,2026-07-20T14:45:15+00:00,AI-led,"AI capability, evaluation, deployment, economics, policy, or infrastructure is the central subject."
+88,90,The Fifty-Dollar-an-Hour Coding Job Nobody Would Take,2026-07-21,2026-07-21T14:30:32+00:00,AI-led,"AI capability, evaluation, deployment, economics, policy, or infrastructure is the central subject."
+89,91,"Did We Teach It, Or Just Ask Nicely",2026-07-21,2026-07-21T14:58:29+00:00,AI-led,"AI capability, evaluation, deployment, economics, policy, or infrastructure is the central subject."
+90,92,"Abundant Ideas, Narrower Science",2026-07-22,2026-07-22T14:25:15+00:00,AI-led,"AI capability, evaluation, deployment, economics, policy, or infrastructure is the central subject."
+91,93,"Sol, Terra, Luna, and the Myth of the Capability Tier",2026-07-22,2026-07-22T14:44:45+00:00,AI-led,"AI capability, evaluation, deployment, economics, policy, or infrastructure is the central subject."
+92,95,The Robot Dog Almost Ran Someone Over,2026-07-23,2026-07-23T14:21:59+00:00,AI-led,"AI capability, evaluation, deployment, economics, policy, or infrastructure is the central subject."
+93,94,The Expiration Date on Settled Science,2026-07-23,2026-07-23T14:42:17+00:00,other,Cross-domain scientific revisions; not AI research.
+94,96,Why Most Hallucination Detection Fails: The Language-Specific Measurement Gap,2026-07-23,2026-07-23T15:01:04+00:00,AI-led,"AI capability, evaluation, deployment, economics, policy, or infrastructure is the central subject."
+95,97,Does the Model Actually Think in English?,2026-07-24,2026-07-24T14:22:23+00:00,AI-led,"AI capability, evaluation, deployment, economics, policy, or infrastructure is the central subject."
+96,98,The Hidden Vote Inside Every Aligned AI,2026-07-24,2026-07-24T14:43:09+00:00,AI-led,"AI capability, evaluation, deployment, economics, policy, or infrastructure is the central subject."
+97,99,"When Growth Stops, What Actually Breaks",2026-07-26,2026-07-26T19:16:09+00:00,other,Population and economic growth.
+98,100,The Benchmark That Wasn't About Flying,2026-07-27,2026-07-27T14:34:34+00:00,AI-led,"AI capability, evaluation, deployment, economics, policy, or infrastructure is the central subject."
+99,101,Grading a Mind That's Grading You Back,2026-07-28,2026-07-28T14:47:19+00:00,AI-led,"AI capability, evaluation, deployment, economics, policy, or infrastructure is the central subject."
+100,102,The Attack That Checked Out and the Story That Didn't,2026-07-29,2026-07-29T14:38:18+00:00,AI-led,"AI capability, evaluation, deployment, economics, policy, or infrastructure is the central subject."
+101,103,How Chatbots Learned to Lean,2026-07-30,2026-07-30T14:50:15+00:00,AI-led,"AI capability, evaluation, deployment, economics, policy, or infrastructure is the central subject."
+102,104,The Override Problem,2026-07-31,2026-07-31T14:39:15+00:00,AI-led,"AI capability, evaluation, deployment, economics, policy, or infrastructure is the central subject."
+103,105,"The Vending Machine, the Home-Field Grader, and Six to One",2026-08-01,2026-08-01T14:43:42+00:00,AI-led,"AI capability, evaluation, deployment, economics, policy, or infrastructure is the central subject."
+104,106,Did the Machine Understand What It Found?,2026-08-02,2026-08-02T14:36:25+00:00,AI-led,"AI capability, evaluation, deployment, economics, policy, or infrastructure is the central subject."
+105,107,The Multilingual AI Tax Nobody Priced Correctly,2026-08-04,2026-08-04T14:43:36+00:00,AI-led,"AI capability, evaluation, deployment, economics, policy, or infrastructure is the central subject."
+106,108,"The Reasoning Tax, A Timeline of Language Models Overthinking",2026-08-05,2026-08-05T14:49:06+00:00,AI-led,"AI capability, evaluation, deployment, economics, policy, or infrastructure is the central subject."
+107,110,What Sparsity Actually Buys You,2026-08-06,2026-08-06T14:40:53+00:00,AI-led,"AI capability, evaluation, deployment, economics, policy, or infrastructure is the central subject."
+108,109,The Scorer Is the Whole Bet,2026-08-07,2026-08-07T14:43:49+00:00,AI-led,"AI capability, evaluation, deployment, economics, policy, or infrastructure is the central subject."
+109,111,The Number the Model Won't Give You,2026-08-08,2026-08-08T14:45:46+00:00,AI-led,"AI capability, evaluation, deployment, economics, policy, or infrastructure is the central subject."
+110,112,The Bitter Lesson of Tool Calling,2026-08-09,2026-08-09T14:45:19+00:00,AI-led,"AI capability, evaluation, deployment, economics, policy, or infrastructure is the central subject."
+111,113,Did Claude Actually Break Cryptography?,2026-08-10,,AI-led,"AI capability, evaluation, deployment, economics, policy, or infrastructure is the central subject."
+112,114,The Second Dial,2026-08-11,2026-08-11T14:35:33+00:00,AI-led,"AI capability, evaluation, deployment, economics, policy, or infrastructure is the central subject."
+113,115,"Ten Million Tokens, One Real Wall",2026-08-12,2026-08-12T14:29:50+00:00,AI-led,"AI capability, evaluation, deployment, economics, policy, or infrastructure is the central subject."
+114,116,Who Wrote Your Methods Section,2026-08-13,2026-08-13T14:29:08+00:00,AI-led,"AI capability, evaluation, deployment, economics, policy, or infrastructure is the central subject."
+115,117,"The Riemann Jump, Real Math, Borrowed Trust",2026-08-14,2026-08-14T14:33:50+00:00,AI-led,"AI capability, evaluation, deployment, economics, policy, or infrastructure is the central subject."
+116,118,Fourteen Months Inside the Multi-Agent Experiment,2026-08-19,2026-08-19T14:29:20+00:00,AI-led,"AI capability, evaluation, deployment, economics, policy, or infrastructure is the central subject."
+117,119,The Watermark the Law Can't Have,2026-08-20,2026-08-20T14:16:09+00:00,AI-led,"AI capability, evaluation, deployment, economics, policy, or infrastructure is the central subject."
+118,120,The Scratchpad That Learned to Keep Quiet,2026-08-21,2026-08-21T14:21:58+00:00,AI-led,"AI capability, evaluation, deployment, economics, policy, or infrastructure is the central subject."
+119,121,The Convergence That Isn't,2026-08-22,2026-08-22T14:17:28+00:00,AI-led,"AI capability, evaluation, deployment, economics, policy, or infrastructure is the central subject."
+120,122,Can You Actually Delete One Fact From an AI,2026-08-23,2026-08-23T14:19:32+00:00,AI-led,"AI capability, evaluation, deployment, economics, policy, or infrastructure is the central subject."
+121,123,"The Math Benchmark Nobody Could Game, Until 2026",2026-08-24,2026-08-24T14:19:17+00:00,AI-led,"AI capability, evaluation, deployment, economics, policy, or infrastructure is the central subject."
+122,124,The Protein Headline Was the Decoy,2026-08-25,2026-08-25T14:17:38+00:00,AI-led,"AI capability, evaluation, deployment, economics, policy, or infrastructure is the central subject."
+123,125,The Agent With No Memory,2026-08-26,2026-08-26T14:21:47+00:00,AI-led,"AI capability, evaluation, deployment, economics, policy, or infrastructure is the central subject."
+124,126,"Retrain Toward AI, or Away From It",2026-08-27,2026-08-27T14:23:30+00:00,AI-led,"AI capability, evaluation, deployment, economics, policy, or infrastructure is the central subject."
+125,127,Reading Is Not Using: The Fight Over AI's Financial Judgment,2026-08-28,2026-08-28T14:14:57+00:00,AI-led,"AI capability, evaluation, deployment, economics, policy, or infrastructure is the central subject."
+126,128,When AI Audits AI,2026-08-29,2026-08-29T14:20:09+00:00,AI-led,"AI capability, evaluation, deployment, economics, policy, or infrastructure is the central subject."
+127,129,The DeepMind Vision Framework That Wasn't DeepMind's,2026-08-30,2026-08-30T14:14:47+00:00,AI-led,"AI capability, evaluation, deployment, economics, policy, or infrastructure is the central subject."
+128,130,Eighty-Five Ways to Explain One Neuron,2026-08-31,2026-08-31T14:16:17+00:00,AI-led,"AI capability, evaluation, deployment, economics, policy, or infrastructure is the central subject."
+129,131,The Fixer Grades Its Own Test,2026-09-01,2026-09-01T14:18:26+00:00,AI-led,"AI capability, evaluation, deployment, economics, policy, or infrastructure is the central subject."
+130,132,Grading Its Own Homework,2026-09-02,2026-09-02T14:16:45+00:00,AI-led,"AI capability, evaluation, deployment, economics, policy, or infrastructure is the central subject."
+131,133,The Chip That Lies,2026-09-03,2026-09-03T14:15:21+00:00,AI-led,"AI capability, evaluation, deployment, economics, policy, or infrastructure is the central subject."
+132,134,The Keyhole Anthropic Built to Watch Itself,2026-09-04,2026-09-04T14:14:24+00:00,AI-led,"AI capability, evaluation, deployment, economics, policy, or infrastructure is the central subject."
+133,135,SQLite as an Application File Format,2026-09-05,2026-09-08T05:42:57+00:00,other,SQLite document design; technical but not AI-led.
+134,136,The parts the computer checked,2026-09-08,2026-09-08T14:16:41+00:00,AI-led,"AI capability, evaluation, deployment, economics, policy, or infrastructure is the central subject."
+135,138,Interference Weights and the Limits of Circuit Tracing,2026-09-09,2026-09-09T14:13:13+00:00,AI-led,"AI capability, evaluation, deployment, economics, policy, or infrastructure is the central subject."
+136,139,The Unseen Question,2026-09-10,2026-09-10T14:38:05+00:00,AI-led,"AI capability, evaluation, deployment, economics, policy, or infrastructure is the central subject."
+137,140,The Silicon Bottleneck,2026-09-11,2026-09-11T14:13:27+00:00,AI-led,"AI compute infrastructure or its economics; classified AI-led even though the mechanism is hardware, energy, or tooling."
+138,141,The Price of Being Caught,2026-09-12,2026-09-12T14:14:32+00:00,other,Grid and civic resilience; not framed around AI demand.
+139,144,The Prompt Box at the Border,2026-09-17,2026-09-17T14:13:53+00:00,AI-led,"AI capability, evaluation, deployment, economics, policy, or infrastructure is the central subject."
+140,145,"The clearest recent agent-paper cluster is harness engineering, not model capability",2026-09-18,2026-09-18T14:16:29+00:00,AI-led,"AI capability, evaluation, deployment, economics, policy, or infrastructure is the central subject."
+141,147,Infinite-Parameter LLMs and the Dilution Boundary,2026-09-20,2026-09-20T14:13:03+00:00,AI-led,"AI capability, evaluation, deployment, economics, policy, or infrastructure is the central subject."
+142,148,Anthropic's Frontier Red Team and the baseline problem in tactical evaluations,2026-09-21,2026-09-21T14:36:02+00:00,AI-led,"AI capability, evaluation, deployment, economics, policy, or infrastructure is the central subject."
+143,149,SoL-Pi and the Token-Efficiency Constraint on Recursive Self-Improvement,2026-09-22,2026-09-22T14:14:36+00:00,AI-led,"AI capability, evaluation, deployment, economics, policy, or infrastructure is the central subject."
+144,150,Misalignment in the Breach: Anthropic's September 9 Assessment,2026-09-23,2026-09-23T14:10:47+00:00,AI-led,"AI capability, evaluation, deployment, economics, policy, or infrastructure is the central subject."
+145,157,How a $2 Trillion Settlement Shock Happens in Hours: What Actually Settles a US Stock Trade Today Under T+1,2026-09-25,2026-09-25T14:40:23+00:00,other,Equity trade clearing and settlement; not AI-led.
+146,158,"Why the CUDA Moat is an Accumulation, Not Raw Physics",2026-09-26,2026-09-26T14:11:11+00:00,AI-led,"AI compute infrastructure or its economics; classified AI-led even though the mechanism is hardware, energy, or tooling."
+147,161,The Interconnection Queue is Now the Real Bottleneck for Data-Center Power,2026-09-30,2026-09-30T14:41:29+00:00,AI-led,"Electricity infrastructure, but the listener question explicitly centers AI/data-center demand; classified AI-led."
+148,162,Follow the Money Behind a Restarted Reactor: Constellation's $1.6 Billion Three Mile Island Relaunch,2026-10-01,2026-10-01T14:13:25+00:00,AI-led,"Electricity infrastructure, but the listener question explicitly centers AI/data-center demand; classified AI-led."

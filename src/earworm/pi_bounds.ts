@@ -28,8 +28,16 @@ export default function (pi: ExtensionAPI): void {
   let toolCalls = 0;
   pi.on("tool_call", (event) => {
     if (canary || !limits.tools.includes(event.toolName)) stop("Unapproved tool call.");
-    if (++toolCalls > limits.max_tool_calls) stop("Tool-call limit reached.");
     if (Date.now() >= limits.deadline_ms) stop("Stage deadline reached.");
+    if (toolCalls >= limits.max_tool_calls) {
+      // A single response can request a batch larger than the remaining allowance.
+      // Pi's supported block result prevents the excess executions while leaving
+      // the gathered evidence available for the already-bounded final request.
+      return { block: true, reason:
+        "Retrieval tool-call budget exhausted. This tool did not run. Finish the requested artifact " +
+        "using available evidence; mark unsupported points as gaps or HOLD the episode." };
+    }
+    toolCalls++;
   });
   pi.on("before_provider_request", (event, ctx) => {
     if (ctx.model?.provider !== limits.provider || ctx.model?.id !== limits.model) stop("Unexpected model route.");
