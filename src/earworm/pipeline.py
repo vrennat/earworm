@@ -245,6 +245,8 @@ def validate_script(text: str, ctx: RunContext) -> None:
 
 
 _DECISIONS = ("EPISODE: PROCEED", "EPISODE: HOLD")
+_UNMARKED_VERDICT = re.compile(
+    r"\b(?:HOLD|PROCEED)\b|(?i:\bepisode\b\W{0,3}(?:hold|proceed)\b|\b(?:decision|verdict)\s*\W{0,3}\s*[:：—–-])")
 _REVIEW_SECTIONS = ("## Factual review", "## Editorial commission")
 
 
@@ -260,14 +262,20 @@ def ensure_review_decision(ctx: RunContext, cfg: PipelineConfig, model: Optional
     - No marker at all: one bounded call asks what the review concluded. Its
       answer is recorded against the review's hash, so an unclear answer stays
       held on retry instead of being re-asked. A failed call records nothing and
-      leaves the review unrepaired, so the gate refuses and the paid review is
-      still resumable.
+      leaves the review unrepaired (the error goes to review.decision.error.txt),
+      so the gate refuses and the paid review is still resumable. Delete
+      review.decision.json to ask again.
+    - A review that states a verdict in any other shape (HOLD or PROCEED in
+      capitals, "Decision:", "Verdict:", an EPISODE line without a colon) or
+      that could close the review tags is refused without a call: an explicit
+      verdict is never reinterpreted by a model.
 
     The original text is kept in review.original.md, and the full original
     text, including any preamble, stays below the decision line.
     """
     if not ctx.review_enabled or not ctx.review_path.exists():
         return
+    raw = ctx.review_path.read_bytes()
     text = _read(ctx.review_path)
     lines = text.splitlines()
     if lines and lines[0] in _DECISIONS:
@@ -283,14 +291,14 @@ def ensure_review_decision(ctx: RunContext, cfg: PipelineConfig, model: Optional
         decision = marker.group(0).strip()
         body = (text[:marker.start()] + text[marker.end():].lstrip("\n")).lstrip("\n")
     else:
-        if "</review>" in text:
+        if _UNMARKED_VERDICT.search(text) or re.search(r"<\s*/?\s*review\b", text, re.I):
             return
         record = ctx.run_dir / "review.decision.json"
         digest = hashlib.sha256(text.encode()).hexdigest()
         try:
             saved = json.loads(record.read_text())
             answer = saved["answer"] if saved.get("review_sha256") == digest else None
-        except (OSError, ValueError, KeyError):
+        except (OSError, ValueError, KeyError, TypeError, AttributeError):
             answer = None
         if answer is None:
             try:
@@ -312,7 +320,7 @@ def ensure_review_decision(ctx: RunContext, cfg: PipelineConfig, model: Optional
         state = json.loads(state_path.read_text())
     except (OSError, ValueError):
         return
-    if state.get("artifact") == hashlib.sha256(text.encode()).hexdigest():
+    if state.get("artifact") == hashlib.sha256(raw).hexdigest():
         state["artifact"] = hashlib.sha256(ctx.review_path.read_bytes()).hexdigest()
         state_path.write_text(json.dumps(state) + "\n")
 
@@ -328,11 +336,12 @@ def require_episode_approval(ctx: RunContext) -> None:
     if decision == "EPISODE: HOLD":
         reason = "Evidence review put this episode on HOLD; see review.md before retrying."
     else:
-        reason = "Review must begin with exactly EPISODE: PROCEED or EPISODE: HOLD; refusing to write or stage."
+        reason = ("Review must begin with exactly EPISODE: PROCEED or EPISODE: HOLD; refusing to write or stage. "
+                  "If review.decision.json records an unclear answer, delete it to ask again.")
     raise StageError("review", ValueError(reason))
 
 
-def screen_editorial_commission(ctx: RunContext, cfg: PipelineConfig) -> None:
+def screen_editorial_commission(ctx: RunContext, cfg: PipelineConfig, cli_model: Optional[str] = None) -> None:
     """Check the selected story, including reframes, against recent narration.
 
     Called once at the review handoff, even for a resumed review. The existing
@@ -344,7 +353,7 @@ def screen_editorial_commission(ctx: RunContext, cfg: PipelineConfig) -> None:
     if not ctx.review_enabled:
         return
     try:
-        ensure_review_decision(ctx, cfg, resolve_model(None, cfg.for_stage("review").model, cfg.default_model))
+        ensure_review_decision(ctx, cfg, resolve_model(cli_model, cfg.for_stage("review").model, cfg.default_model))
     except Exception as exc:
         raise StageError("review", exc) from exc
     require_episode_approval(ctx)
