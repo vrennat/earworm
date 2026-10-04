@@ -8,6 +8,9 @@ prompts/review.md alongside this code. Legacy reviews without the decision line
 fail closed. Updating the prompt invalidates the review input fingerprint, so an
 explicit rerun generates a new review; artifacts are never silently grandfathered
 in or automatically retried. Configurations with review disabled remain valid.
+The one exception is ensure_review_decision: a complete review whose only defect
+is a buried or missing decision line is repaired, never a malformed or
+conflicting one.
 """
 from __future__ import annotations
 
@@ -245,15 +248,23 @@ _DECISIONS = ("EPISODE: PROCEED", "EPISODE: HOLD")
 _REVIEW_SECTIONS = ("## Factual review", "## Editorial commission")
 
 
-def ensure_review_decision(ctx: RunContext, cfg: PipelineConfig) -> None:
+def ensure_review_decision(ctx: RunContext, cfg: PipelineConfig, model: Optional[str] = None) -> None:
     """Repair a complete review whose decision line is buried or missing.
 
-    Models sometimes open with notes about their tool use, or forget the first
-    line entirely while still writing both required sections. A single decision
-    line before the sections is moved to the top. When there is none, one bounded
-    call asks what the review concluded; an unclear answer holds. An explicit but
-    invalid decision, or a review missing its sections, is left for
-    require_episode_approval to refuse. The original is kept beside the review.
+    Models sometimes open with notes about their tool use, or omit the first
+    line while still writing both required sections. Only that narrow case is
+    repaired; everything else is left for require_episode_approval to refuse.
+
+    - Exactly one EPISODE marker in the whole review, valid and before the
+      sections: it moves to the top. Any other marker shape or count refuses.
+    - No marker at all: one bounded call asks what the review concluded. Its
+      answer is recorded against the review's hash, so an unclear answer stays
+      held on retry instead of being re-asked. A failed call records nothing and
+      leaves the review unrepaired, so the gate refuses and the paid review is
+      still resumable.
+
+    The original text is kept in review.original.md, and the full original
+    text, including any preamble, stays below the decision line.
     """
     if not ctx.review_enabled or not ctx.review_path.exists():
         return
@@ -261,26 +272,41 @@ def ensure_review_decision(ctx: RunContext, cfg: PipelineConfig) -> None:
     lines = text.splitlines()
     if lines and lines[0] in _DECISIONS:
         return
-    starts = [re.search(rf"(?m)^{re.escape(h)}[ \t]*$", text) for h in _REVIEW_SECTIONS]
-    if not all(starts) or starts[0].start() > starts[1].start():
+    sections = [re.search(rf"(?m)^{re.escape(h)}[ \t]*$", text) for h in _REVIEW_SECTIONS]
+    if not all(sections) or sections[0].start() > sections[1].start():
         return
-    head, sections = text[:starts[0].start()], text[starts[0].start():]
-    stated = [line.strip() for line in head.splitlines() if line.strip().startswith("EPISODE:")]
-    if stated:
-        if len(stated) != 1 or stated[0] not in _DECISIONS:
+    markers = list(re.finditer(r"(?im)^.*\bepisode\s*:.*$", text))
+    if markers:
+        marker = markers[0]
+        if len(markers) != 1 or marker.start() > sections[0].start() or marker.group(0).strip() not in _DECISIONS:
             return
-        decision = stated[0]
+        decision = marker.group(0).strip()
+        body = (text[:marker.start()] + text[marker.end():].lstrip("\n")).lstrip("\n")
     else:
-        prompt = llm.render_prompt(ctx.prompts / "review_decision.md", review_content=text)
-        timeout = cfg.for_stage("review").timeout
-        answer = llm.run_text(prompt, cwd=ctx.root, timeout=120 if timeout is None else min(timeout, 300),
-                              stage="review", ledger_path=ctx.ledger_path).strip()
-        (ctx.run_dir / "review.decision.md").write_text(answer + "\n")
+        if "</review>" in text:
+            return
+        record = ctx.run_dir / "review.decision.json"
+        digest = hashlib.sha256(text.encode()).hexdigest()
+        try:
+            saved = json.loads(record.read_text())
+            answer = saved["answer"] if saved.get("review_sha256") == digest else None
+        except (OSError, ValueError, KeyError):
+            answer = None
+        if answer is None:
+            try:
+                prompt = llm.render_prompt(ctx.prompts / "review_decision.md", review_content=text)
+                timeout = cfg.for_stage("review").timeout
+                answer = llm.run_text(prompt, cwd=ctx.root, timeout=120 if timeout is None else min(timeout, 300),
+                                      model=model, stage="review", ledger_path=ctx.ledger_path).strip()
+            except Exception as exc:  # the gate refuses; a later retry may ask again
+                (ctx.run_dir / "review.decision.error.txt").write_text(f"{type(exc).__name__}: {exc}\n")
+                return
+            record.write_text(json.dumps({"review_sha256": digest, "answer": answer}) + "\n")
         if answer not in _DECISIONS:
             return
-        decision = answer
+        decision, body = answer, text.lstrip("\n")
     (ctx.run_dir / "review.original.md").write_text(text)
-    ctx.review_path.write_text(f"{decision}\n\n{sections}")
+    ctx.review_path.write_text(f"{decision}\n\n{body}")
     state_path = ctx.run_dir / "review.state.json"
     try:
         state = json.loads(state_path.read_text())
@@ -318,7 +344,7 @@ def screen_editorial_commission(ctx: RunContext, cfg: PipelineConfig) -> None:
     if not ctx.review_enabled:
         return
     try:
-        ensure_review_decision(ctx, cfg)
+        ensure_review_decision(ctx, cfg, resolve_model(None, cfg.for_stage("review").model, cfg.default_model))
     except Exception as exc:
         raise StageError("review", exc) from exc
     require_episode_approval(ctx)
@@ -381,7 +407,7 @@ def run_stage(stage: Stage, ctx: RunContext, cfg: PipelineConfig, *,
         if not expect.exists() or (stage.name != "script_review" and not expect.read_text().strip()):
             raise ValueError(f"Missing completed {stage.name} artifact")
         if stage.name == "review":
-            ensure_review_decision(ctx, cfg)
+            ensure_review_decision(ctx, cfg, resolve_model(cli_model, sc.model, cfg.default_model))
         if stage.name in {"script", "revise"}:
             validate_script(expect.read_text(), ctx)
             (ctx.run_dir / f"{stage.name}.output.md").write_text(expect.read_text())
