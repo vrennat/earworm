@@ -208,7 +208,8 @@ def test_proceed_review_runs_full_pipeline_and_reaches_inbox():
 
 
 def test_hold_and_malformed_reviews_stop_before_writer_even_when_resumed():
-    for review_text in (review("HOLD"), "A legacy review without a decision", review("MAYBE"), "\n" + review()):
+    for review_text in (review("HOLD"), "A legacy review without a decision", review("MAYBE"),
+                        "EPISODE: MAYBE\n" + review()):
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp).resolve()
             context(root)
@@ -238,6 +239,92 @@ def test_hold_and_malformed_reviews_stop_before_writer_even_when_resumed():
                 # decision. Neither a writer nor an automatic LLM retry ran.
                 assert calls == ["research", "review"]
             config.paths.cache_clear()
+
+
+SECTIONS = "## Factual review\nVerified evidence.\n\n## Editorial commission\nA supported explanation.\n"
+
+
+def run_with_review(review_text, decision_answer=None):
+    """Run one topic; return (calls, decision calls, topic row, run dir)."""
+    import tempfile as _t
+    tmp = _t.TemporaryDirectory()
+    root = Path(tmp.name).resolve()
+    context(root)
+    calls, decisions = [], []
+
+    def run_text(prompt, **kwargs):
+        decisions.append(kwargs["stage"])
+        assert "<review>" in prompt
+        return decision_answer
+
+    with patch.dict(os.environ, {"EARWORM_HOME": str(root)}):
+        config.paths.cache_clear()
+        db.init()
+        tid = db.add_topic("A topic")
+        with patch.object(pipeline.llm, "run", fake_model(review_text, calls)), \
+                patch.object(pipeline.llm, "run_text", run_text):
+            try:
+                runner.run_one(tid)
+            except pipeline.StageError as exc:
+                assert exc.stage == "review"
+        row = db.get_topic(tid)
+    config.paths.cache_clear()
+    return calls, decisions, row, root / "runs" / row["run_id"], tmp
+
+
+def test_buried_decision_line_is_moved_to_top_without_an_extra_call():
+    for preamble in ("\n", "I have enough to complete the review.\n\n"):
+        text = preamble + "EPISODE: PROCEED\n\n" + SECTIONS
+        calls, decisions, row, run_dir, tmp = run_with_review(text)
+        with tmp:
+            assert row["status"] == "done"
+            assert decisions == []
+            assert calls == ["research", "review", "script", "script_review", "revise"]
+            assert (run_dir / "review.md").read_text() == "EPISODE: PROCEED\n\n" + SECTIONS
+            assert (run_dir / "review.original.md").read_text() == text
+    calls, decisions, row, run_dir, tmp = run_with_review("Notes first.\n" + review("HOLD"))
+    with tmp:
+        assert row["status"] == "failed" and decisions == [] and calls == ["research", "review"]
+        assert (run_dir / "review.md").read_text().startswith("EPISODE: HOLD\n")
+
+
+def test_missing_decision_asks_once_and_unclear_answers_hold():
+    text = "The SEC page returns empty.\n\n" + SECTIONS
+    for answer, status in (("EPISODE: PROCEED", "done"), ("EPISODE: HOLD", "failed"),
+                           ("I think it should proceed", "failed")):
+        calls, decisions, row, run_dir, tmp = run_with_review(text, answer)
+        with tmp:
+            assert row["status"] == status, answer
+            assert decisions == ["review"]
+            assert (run_dir / "review.decision.md").read_text().strip() == answer
+            if status == "failed":
+                assert calls == ["research", "review"]
+                assert "script.md" not in [p.name for p in run_dir.iterdir()]
+
+
+def test_repaired_review_resumes_without_rerunning_review():
+    text = "Notes about tool use.\n\n" + SECTIONS
+    with tempfile.TemporaryDirectory() as tmp:
+        root = Path(tmp).resolve()
+        context(root)
+        calls, decisions = [], []
+        with patch.dict(os.environ, {"EARWORM_HOME": str(root)}):
+            config.paths.cache_clear()
+            db.init()
+            tid = db.add_topic("A topic")
+            answers = iter(["unclear", "EPISODE: PROCEED"])
+            with patch.object(pipeline.llm, "run", fake_model(text, calls)), \
+                    patch.object(pipeline.llm, "run_text", lambda p, **k: decisions.append(1) or next(answers)):
+                try:
+                    runner.run_one(tid)
+                except pipeline.StageError:
+                    pass
+                assert db.get_topic(tid)["status"] == "failed"
+                runner.run_one(tid)
+            assert db.get_topic(tid)["status"] == "done"
+            assert calls == ["research", "review", "script", "script_review", "revise"]
+            assert len(decisions) == 2
+        config.paths.cache_clear()
 
 
 def test_review_prompt_migration_reruns_review_before_writing():

@@ -241,6 +241,56 @@ def validate_script(text: str, ctx: RunContext) -> None:
         raise ValueError("Script contains code fences instead of plain spoken prose.")
 
 
+_DECISIONS = ("EPISODE: PROCEED", "EPISODE: HOLD")
+_REVIEW_SECTIONS = ("## Factual review", "## Editorial commission")
+
+
+def ensure_review_decision(ctx: RunContext, cfg: PipelineConfig) -> None:
+    """Repair a complete review whose decision line is buried or missing.
+
+    Models sometimes open with notes about their tool use, or forget the first
+    line entirely while still writing both required sections. A single decision
+    line before the sections is moved to the top. When there is none, one bounded
+    call asks what the review concluded; an unclear answer holds. An explicit but
+    invalid decision, or a review missing its sections, is left for
+    require_episode_approval to refuse. The original is kept beside the review.
+    """
+    if not ctx.review_enabled or not ctx.review_path.exists():
+        return
+    text = _read(ctx.review_path)
+    lines = text.splitlines()
+    if lines and lines[0] in _DECISIONS:
+        return
+    starts = [re.search(rf"(?m)^{re.escape(h)}[ \t]*$", text) for h in _REVIEW_SECTIONS]
+    if not all(starts) or starts[0].start() > starts[1].start():
+        return
+    head, sections = text[:starts[0].start()], text[starts[0].start():]
+    stated = [line.strip() for line in head.splitlines() if line.strip().startswith("EPISODE:")]
+    if stated:
+        if len(stated) != 1 or stated[0] not in _DECISIONS:
+            return
+        decision = stated[0]
+    else:
+        prompt = llm.render_prompt(ctx.prompts / "review_decision.md", review_content=text)
+        timeout = cfg.for_stage("review").timeout
+        answer = llm.run_text(prompt, cwd=ctx.root, timeout=120 if timeout is None else min(timeout, 300),
+                              stage="review", ledger_path=ctx.ledger_path).strip()
+        (ctx.run_dir / "review.decision.md").write_text(answer + "\n")
+        if answer not in _DECISIONS:
+            return
+        decision = answer
+    (ctx.run_dir / "review.original.md").write_text(text)
+    ctx.review_path.write_text(f"{decision}\n\n{sections}")
+    state_path = ctx.run_dir / "review.state.json"
+    try:
+        state = json.loads(state_path.read_text())
+    except (OSError, ValueError):
+        return
+    if state.get("artifact") == hashlib.sha256(text.encode()).hexdigest():
+        state["artifact"] = hashlib.sha256(ctx.review_path.read_bytes()).hexdigest()
+        state_path.write_text(json.dumps(state) + "\n")
+
+
 def require_episode_approval(ctx: RunContext) -> None:
     """Fail closed on fresh or resumed evidence reviews before spending on prose."""
     if not ctx.review_enabled:
@@ -267,6 +317,10 @@ def screen_editorial_commission(ctx: RunContext, cfg: PipelineConfig) -> None:
     """
     if not ctx.review_enabled:
         return
+    try:
+        ensure_review_decision(ctx, cfg)
+    except Exception as exc:
+        raise StageError("review", exc) from exc
     require_episode_approval(ctx)
     receipt: dict = {"candidate": "", "result": "error", "matches": []}
     receipt_path = ctx.run_dir / "commission-screen.json"
@@ -326,6 +380,8 @@ def run_stage(stage: Stage, ctx: RunContext, cfg: PipelineConfig, *,
         )
         if not expect.exists() or (stage.name != "script_review" and not expect.read_text().strip()):
             raise ValueError(f"Missing completed {stage.name} artifact")
+        if stage.name == "review":
+            ensure_review_decision(ctx, cfg)
         if stage.name in {"script", "revise"}:
             validate_script(expect.read_text(), ctx)
             (ctx.run_dir / f"{stage.name}.output.md").write_text(expect.read_text())
